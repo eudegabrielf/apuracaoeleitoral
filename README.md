@@ -4,7 +4,7 @@ Painel open-source para acompanhar resultados oficiais da eleição presidencial
 
 Criado por [Eude Gabriel](https://github.com/eudegabrielf). Este projeto é independente e não representa nem é afiliado ao Tribunal Superior Eleitoral (TSE) ou ao Instituto Brasileiro de Geografia e Estatística (IBGE).
 
-[![Licença MIT](https://img.shields.io/github/license/eudegabrielf/apuracaoeleitoral)](LICENSE.MD)
+[![Licença MIT](https://img.shields.io/github/license/eudegabrielf/apuracaoeleitoral)](LICENSE)
 
 ## Visão geral
 

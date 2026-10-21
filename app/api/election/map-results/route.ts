@@ -4,7 +4,8 @@ const ELECTION_CODES = { "1": "6257", "2": "6258" } as const;
 const MUNICIPALITIES_URL =
   "https://resultados.tse.jus.br/oficial/ele2026/6257/config/mun-e006257-cm.json";
 const MAP_CACHE_TTL = 60_000;
-const REQUEST_CONCURRENCY = 16;
+const REQUEST_CONCURRENCY = 8;
+const MAX_RETRIES = 3;
 
 const IBGE_STATE_UFS: Record<string, string> = {
   "11": "ro", "12": "ac", "13": "am", "14": "rr", "15": "pa", "16": "ap", "17": "to",
@@ -49,6 +50,7 @@ type TSEMunicipality = { cd: string; cdi: string; nm: string };
 type TSECoverage = { cd: string; mu?: TSEMunicipality[] };
 type TSEConfiguration = { abr?: TSECoverage[] };
 type MapWinner = {
+  available: boolean;
   published: boolean;
   candidateId: string | null;
   tieCandidateIds: string[];
@@ -64,6 +66,7 @@ type MapResults = {
   candidates: ElectionCandidate[];
   results: Record<string, MapWinner>;
   unpublished: number;
+  failed: number;
 };
 
 type CachedResults = { expiresAt: number; data: MapResults };
@@ -109,13 +112,21 @@ function getTSEUrl(
 }
 
 async function fetchPayload(url: string): Promise<TSEPayload | null> {
-  const response = await fetch(url, {
-    next: { revalidate: 20 },
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
-  return (await response.json()) as TSEPayload;
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(url, {
+      next: { revalidate: 20 },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      if ([429, 502, 503, 504].includes(response.status) && attempt < MAX_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt));
+        continue;
+      }
+      throw new Error(`${url} returned HTTP ${response.status}`);
+    }
+    return (await response.json()) as TSEPayload;
+  }
 }
 
 async function getConfiguration(): Promise<TSEConfiguration> {
@@ -142,6 +153,7 @@ function buildWinner(payload: TSEPayload | null): MapWinner {
   if (!top || top.votes === 0) {
     return {
       published: payload !== null,
+      available: true,
       candidateId: null,
       tieCandidateIds: [],
       votes: null,
@@ -153,6 +165,7 @@ function buildWinner(payload: TSEPayload | null): MapWinner {
   const ties = candidates.filter((candidate) => candidate.votes === top.votes);
   return {
     published: true,
+    available: true,
     candidateId: ties.length === 1 ? top.id : null,
     tieCandidateIds: ties.length > 1 ? ties.map(({ id }) => id) : [],
     votes: top.votes,
@@ -179,6 +192,7 @@ async function buildMapResults(turn: string, uf: string, scope: string): Promise
 
   const results: Record<string, MapWinner> = {};
   let unpublished = 0;
+  let failed = 0;
   const locations: { ibgeCode: string; resultUrl: string }[] = [];
 
   if (uf === "br") {
@@ -219,8 +233,8 @@ async function buildMapResults(turn: string, uf: string, scope: string): Promise
         results[location.ibgeCode] = buildWinner(payload);
         if (!payload) unpublished++;
       } catch {
-        results[location.ibgeCode] = buildWinner(null);
-        unpublished++;
+        results[location.ibgeCode] = { ...buildWinner(null), available: false };
+        failed++;
       }
     }
   }
@@ -242,6 +256,7 @@ async function buildMapResults(turn: string, uf: string, scope: string): Promise
     candidates: nationalCandidates,
     results,
     unpublished,
+    failed,
   };
   return data;
 }
@@ -259,7 +274,9 @@ async function getMapResults(turn: string, uf: string, scope: string): Promise<M
 
   try {
     const data = await pending;
-    resultCache.set(cacheKey, { expiresAt: Date.now() + MAP_CACHE_TTL, data });
+    if (data.failed === 0) {
+      resultCache.set(cacheKey, { expiresAt: Date.now() + MAP_CACHE_TTL, data });
+    }
     return data;
   } finally {
     if (inFlightResults.get(cacheKey) === pending) inFlightResults.delete(cacheKey);

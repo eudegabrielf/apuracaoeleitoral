@@ -269,7 +269,7 @@ export function ElectionDashboard() {
   const [liveError, setLiveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTurn, setSelectedTurn] = useState(2);
+  const [selectedTurn, setSelectedTurn] = useState(1);
 
   const refresh = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);

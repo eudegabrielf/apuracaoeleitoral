@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RiAddLine, RiArrowLeftLine, RiArrowUpLine, RiMapPin2Line, RiRestartLine, RiSearchLine, RiSubtractLine } from "@remixicon/react";
+import { RiAddLine, RiArrowLeftLine, RiMapPin2Line, RiRestartLine, RiSearchLine, RiSubtractLine } from "@remixicon/react";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
@@ -28,6 +28,7 @@ type Candidate = {
   percentage: number;
 };
 type LocalityWinner = {
+  available: boolean;
   published: boolean;
   candidateId: string | null;
   tieCandidateIds: string[];
@@ -39,10 +40,11 @@ type ElectionMapResults = {
   candidates: Candidate[];
   results: Record<string, LocalityWinner>;
   unpublished: number;
+  failed: number;
   updatedAt: string | null;
   sourceUrl: string;
 };
-type CachedMapResults = { turn: number; data: ElectionMapResults };
+type CachedMapResults = { turn: number; stateId: string | null; data: ElectionMapResults };
 type SelectedMunicipalityResults = {
   municipality: string | null;
   candidates: Candidate[];
@@ -175,6 +177,7 @@ export function ElectionMap({
   const [error, setError] = useState<string | null>(null);
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
   const [nationalResults, setNationalResults] = useState<CachedMapResults | null>(null);
+  const [focusedResults, setFocusedResults] = useState<CachedMapResults | null>(null);
   const [loadingElectionResults, setLoadingElectionResults] = useState(false);
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [hoveredFeature, setHoveredFeature] = useState<HoveredFeature | null>(null);
@@ -277,15 +280,12 @@ export function ElectionMap({
   useEffect(() => {
     let active = true;
     setResultsError(null);
-    if (selectedState) {
-      setLoadingElectionResults(false);
-      return () => {
-        active = false;
-      };
-    }
     setLoadingElectionResults(true);
+    const stateId = selectedState?.properties.id ?? null;
+    const scope = stateId ? "municipalities" : "states";
+    const uf = stateId ?? "br";
 
-    const fetchResults = async (scope: string, uf: string) => {
+    const fetchResults = async () => {
       const response = await fetch(
         `/api/election/map-results?turn=${turn}&scope=${scope}&uf=${uf}`,
         { cache: "no-store" },
@@ -299,8 +299,12 @@ export function ElectionMap({
 
     const refreshElectionResults = async () => {
       try {
-        const data = await fetchResults("states", "br");
-        if (active) setNationalResults({ turn, data });
+        const data = await fetchResults();
+        if (active) {
+          const result = { turn, stateId, data };
+          if (stateId) setFocusedResults(result);
+          else setNationalResults(result);
+        }
         if (active) setResultsError(null);
       } catch (reason) {
         if (active) {
@@ -316,14 +320,18 @@ export function ElectionMap({
     };
 
     void refreshElectionResults();
-    const timer = window.setInterval(() => void refreshElectionResults(), 60_000);
+  const timer = window.setInterval(() => void refreshElectionResults(), stateId ? 120_000 : 60_000);
     return () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, [selectedState, turn]);
+  }, [selectedState?.properties.id, turn]);
 
   const nationalElectionResults = nationalResults?.turn === turn ? nationalResults.data : null;
+  const focusedElectionResults = selectedState && focusedResults?.turn === turn &&
+    focusedResults.stateId === selectedState.properties.id
+    ? focusedResults.data
+    : null;
   const selectedMunicipalityMapResults = useMemo<ElectionMapResults | null>(() => {
     const municipalityId = selectedMunicipality?.properties.id;
     if (
@@ -346,6 +354,7 @@ export function ElectionMap({
       results: {
         [municipalityId]: {
           published: true,
+          available: true,
           candidateId: hasVotes && tiedLeaders.length === 1 ? first!.id : null,
           tieCandidateIds: hasVotes && tiedLeaders.length > 1
             ? tiedLeaders.map(({ id }) => id)
@@ -358,11 +367,20 @@ export function ElectionMap({
         },
       },
       unpublished: 0,
+      failed: 0,
       updatedAt: selectedMunicipalityResults.updatedAt,
       sourceUrl: selectedMunicipalityResults.sourceUrl,
     };
   }, [selectedMunicipality, selectedMunicipalityResults, selectedState]);
-  const electionResults = selectedState ? selectedMunicipalityMapResults : nationalElectionResults;
+  const electionResults = selectedState
+    ? focusedElectionResults && selectedMunicipalityMapResults
+      ? {
+          ...focusedElectionResults,
+          candidates: selectedMunicipalityMapResults.candidates,
+          results: { ...focusedElectionResults.results, ...selectedMunicipalityMapResults.results },
+        }
+      : focusedElectionResults ?? selectedMunicipalityMapResults
+    : nationalElectionResults;
   const selectMunicipality = (feature: MapFeature) => {
     const stateFeature = stateFeatures.find(
       (state) => state.properties.sigla?.toUpperCase() === feature.properties.sigla?.toUpperCase(),
@@ -686,6 +704,11 @@ export function ElectionMap({
               Ainda não há resultados publicados para {electionResults.unpublished} áreas deste mapa.
             </p>
           )}
+          {!resultsError && electionResults && electionResults.failed > 0 && (
+            <p role="status" className="mb-3 rounded-xl border border-border-error-default bg-background-tertiary-default p-3 text-body-2-regular text-text-primary">
+              Não foi possível atualizar {electionResults.failed} áreas agora. Os resultados serão consultados novamente.
+            </p>
+          )}
           {turn === 2 && electionResults && Object.values(electionResults.results).every(
             ({ leaders }) => leaders.length === 0,
           ) && (
@@ -890,6 +913,13 @@ export function ElectionMap({
                   const candidate = electionResults?.candidates.find((entry) => entry.id === leader.candidateId);
                   return candidate ? [{ ...leader, candidate }] : [];
                 }) ?? [];
+                if (result && !result.available) {
+                  return (
+                    <p className="mt-2 text-caption-1-regular text-text-secondary">
+                      Não foi possível consultar os dados deste município agora.
+                    </p>
+                  );
+                }
                 if (leaders.length > 0) {
                   return (
                     <div className="mt-3 flex flex-col gap-3 border-t border-separator-border pt-3">
@@ -958,16 +988,6 @@ export function ElectionMap({
             ? `${features.length} municípios disponíveis`
             : `${states?.features.length ?? 0} unidades da federação`}
         </span>
-        {selectedState && (
-          <Button
-            variant="ghost"
-            size="small"
-            leadingIcon={RiArrowUpLine}
-            onClick={() => onSelectMunicipality(null)}
-          >
-            Limpar município
-          </Button>
-        )}
       </div>
       {electionResults && (
         <div className="mt-5 border-t border-separator-border pt-4">

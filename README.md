@@ -5,7 +5,6 @@ Painel open-source para acompanhar resultados oficiais da eleição presidencial
 Criado por [Eude Gabriel](https://github.com/eudegabrielf). Este projeto é independente e não representa nem é afiliado ao Tribunal Superior Eleitoral (TSE) ou ao Instituto Brasileiro de Geografia e Estatística (IBGE).
 
 [![Licença MIT](https://img.shields.io/github/license/eudegabrielf/apuracaoeleitoral)](LICENSE)
-[![Issues](https://img.shields.io/github/issues/eudegabrielf/apuracaoeleitoral)](https://github.com/eudegabrielf/apuracaoeleitoral/issues)
 
 ## Visão geral
 
@@ -89,10 +88,6 @@ styles/                   Tokens, tipografia e estilos globais
 - `GET /api/ibge/map?scope=states` — limites estaduais; `scope=municipalities&uf=br` consulta a malha municipal nacional; `scope=municipalities&uf=<código IBGE>` consulta um estado.
 
 Essas rotas fazem as consultas externas no servidor e devolvem respostas próprias para o dashboard. A rota do mapa agrega resultados do TSE com concorrência limitada e cache em memória para reduzir chamadas repetidas.
-
-## Contribuir
-
-Issues e pull requests são bem-vindos. Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para preparar o ambiente e validar alterações.
 
 ## Autor
 

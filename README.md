@@ -42,7 +42,7 @@ The results route is a server-side proxy, so the TSE feed URL does not depend on
 ## What's in this repository
 
 - All 69 free items as source: base components, application blocks, tokens and type scale. The catalogue is below.
-- The app: a national-only election dashboard at `/`, turn-aware indicator details at `/dados/[slug]`, and the state and municipality results map at `/mapa-apuracoes`.
+- The app: a presidential election dashboard at `/` with national and locality statistics, an interactive state and municipality map, candidate results, and an election progress chart.
 
 ## Install into an existing project
 

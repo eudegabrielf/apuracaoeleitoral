@@ -1,26 +1,21 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   RiBarChartBoxLine,
-  RiDashboardLine,
   RiExternalLinkLine,
-  RiMap2Line,
   RiMoonLine,
   RiRefreshLine,
   RiSunLine,
   RiTimeLine,
-  RiUserLine,
 } from "@remixicon/react";
 import { Badge } from "@/components/base/badges/badge";
-import { Button, ButtonLink } from "@/components/base/buttons/button";
+import { Button } from "@/components/base/buttons/button";
 import { PillTab, PillTabList } from "@/components/base/tabs/pill-tab";
 import { ElectionEvolutionChart } from "@/components/application/election/election-evolution-chart";
+import { ElectionRegions } from "@/components/application/election/election-regions";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
-import { ElectionMap, type MapFeature } from "@/components/application/election/election-map";
 import { cx } from "@/utils/cx";
 
 type Candidate = {
@@ -135,33 +130,6 @@ async function fetchResults(turn: number, uf = "br", municipality?: string): Pro
   }
 
   return result as ElectionResults;
-}
-
-function ResultCard({
-  icon: Icon,
-  title,
-  value,
-  detail,
-}: {
-  icon: typeof RiBarChartBoxLine;
-  title: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col justify-between gap-5 rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card">
-      <div className="flex items-center gap-3">
-        <span className="rounded-xl bg-background-secondary-default p-2.5 text-foreground-icon-secondary">
-          <Icon className="size-5" aria-hidden />
-        </span>
-      </div>
-      <div className="min-w-0">
-        <p className="text-body-2-medium text-text-secondary">{title}</p>
-        <p className="mt-1 truncate text-title-2-medium tabular-nums text-text-primary">{value}</p>
-        <p className="mt-1 text-caption-1-regular text-text-tertiary">{detail}</p>
-      </div>
-    </div>
-  );
 }
 
 function CandidateResult({
@@ -279,58 +247,7 @@ function CandidatePanel({
   );
 }
 
-function Sidebar() {
-  const navigation = [
-    { label: "Visão geral", href: "/", icon: RiDashboardLine },
-    { label: "Mapa e localidades", href: "/mapa-apuracoes", icon: RiMap2Line },
-  ];
-
-  return (
-    <aside className="fixed inset-y-4 start-4 z-20 hidden h-[calc(100vh-2rem)] w-60 flex-col rounded-3xl border border-border-button-default bg-background-primary-default p-4 shadow-card lg:flex">
-      <Link href="/" className="flex items-center gap-3 rounded-2xl p-2">
-        <span>
-          <span className="block text-body-medium text-text-primary">Apuração</span>
-          <span className="block text-caption-1-regular text-text-secondary">Eleições 2026</span>
-        </span>
-      </Link>
-      <nav aria-label="Navegação principal" className="mt-8 flex flex-col gap-1">
-        <p className="px-3 pb-2 text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
-          Painel
-        </p>
-        {navigation.map(({ label, href, icon: Icon }, index) => (
-          <Link
-            key={href}
-            href={href}
-            aria-current={index === 0 ? "page" : undefined}
-            className={cx(
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-body-2-medium transition-colors",
-              index === 0
-                ? "bg-background-secondary-default text-text-primary"
-                : "text-text-secondary hover:bg-background-secondary-default hover:text-text-primary",
-            )}
-          >
-            <Icon className="size-5" aria-hidden />
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <div className="mt-auto flex flex-col gap-3 border-t border-separator-border pt-4">
-        <ThemeToggle />
-        <a
-          href="https://resultados.tse.jus.br/oficial/app/index.html"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2 px-2 text-caption-1-regular text-text-tertiary hover:text-text-primary"
-        >
-          Portal oficial do TSE <RiExternalLinkLine className="size-3.5" aria-hidden />
-        </a>
-      </div>
-    </aside>
-  );
-}
-
 export function ElectionDashboard() {
-  const router = useRouter();
   const [firstRound, setFirstRound] = useState<ElectionResults | null>(null);
   const [liveResults, setLiveResults] = useState<ElectionResults | null>(null);
   const [firstRoundError, setFirstRoundError] = useState<string | null>(null);
@@ -381,9 +298,7 @@ export function ElectionDashboard() {
 
   return (
     <div className="min-h-screen bg-background-full p-3 sm:p-4">
-      <div className="mx-auto w-full max-w-[1600px] lg:ps-64">
-        <Sidebar />
-
+      <div className="mx-auto w-full max-w-[1600px]">
         <main className="min-w-0 rounded-3xl bg-background-full lg:px-2 lg:py-2">
           <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 pb-8">
             <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-button-default bg-background-primary-default px-5 py-3 shadow-card">
@@ -410,15 +325,7 @@ export function ElectionDashboard() {
                 >
                   Atualizar
                 </Button>
-                <ButtonLink
-                  href="/mapa-apuracoes"
-                  variant="secondary"
-                  size="small"
-                  leadingIcon={RiMap2Line}
-                >
-                  Mapa
-                </ButtonLink>
-                <span className="lg:hidden"><ThemeToggle /></span>
+                <ThemeToggle />
               </div>
             </header>
 
@@ -431,7 +338,7 @@ export function ElectionDashboard() {
                   A apuração presidencial, em um só lugar.
                 </h1>
                 <p className="mt-2 text-body-regular text-text-secondary">
-                  Acompanhe os resultados presidenciais oficiais em todo o Brasil. Os detalhes por estado e município estão no mapa eleitoral.
+                  Acompanhe os resultados presidenciais oficiais em todo o Brasil, com consulta por estado e município neste painel.
                 </p>
               </div>
               <a
@@ -493,86 +400,106 @@ export function ElectionDashboard() {
               </p>
             )}
 
-            <section aria-label={`Indicadores nacionais do ${selectedTurnName.toLowerCase()}`} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <ResultCard
-                icon={RiBarChartBoxLine}
-                title={`Votos válidos · ${selectedTurn}º turno`}
-                value={formatNumber(selectedResults?.statistics.validVotes)}
-                detail="Resultado presidencial oficial"
-              />
-              <ResultCard
-                icon={RiDashboardLine}
-                title="Eleitorado apto"
-                value={formatNumber(selectedResults?.statistics.eligibleVoters)}
-                detail="Total de eleitores registrados"
-              />
-              <ResultCard
-                icon={RiMap2Line}
-                title="Seções totalizadas"
-                value={
-                  selectedResults?.sections.counted == null
-                    ? "—"
-                    : `${formatNumber(selectedResults.sections.counted)} / ${formatNumber(selectedResults.sections.total)}`
-                }
-                detail={formatPercent(selectedResults?.sections.percentage)}
-              />
-              <ResultCard
-                icon={RiTimeLine}
-                title={`Comparecimento · ${selectedTurn}º turno`}
-                value={formatNumber(selectedResults?.statistics.voters)}
-                detail={`${formatPercent(
-                  selectedResults?.statistics.eligibleVoters && selectedResults.statistics.voters != null
-                    ? (selectedResults.statistics.voters / selectedResults.statistics.eligibleVoters) * 100
-                    : null,
-                )} do eleitorado apto`}
-              />
-              <ResultCard
-                icon={RiUserLine}
-                title={`Abstenções · ${selectedTurn}º turno`}
-                value={formatNumber(selectedResults?.statistics.abstentions)}
-                detail={`${formatPercent(selectedResults?.statistics.abstentionPercentage)} do eleitorado apto`}
-              />
-              <ResultCard
-                icon={RiBarChartBoxLine}
-                title="Votos em branco"
-                value={formatNumber(selectedResults?.statistics.blankVotes)}
-                detail={`${formatPercent(
-                  selectedResults?.statistics.voters && selectedResults.statistics.blankVotes != null
-                    ? (selectedResults.statistics.blankVotes / selectedResults.statistics.voters) * 100
-                    : null,
-                )} dos votos registrados`}
-              />
-              <ResultCard
-                icon={RiBarChartBoxLine}
-                title="Votos nulos"
-                value={formatNumber(selectedResults?.statistics.nullVotes)}
-                detail={`${formatPercent(
-                  selectedResults?.statistics.voters && selectedResults.statistics.nullVotes != null
-                    ? (selectedResults.statistics.nullVotes / selectedResults.statistics.voters) * 100
-                    : null,
-                )} dos votos registrados`}
-              />
+            <section
+              aria-label={`Estatísticas nacionais do ${selectedTurnName.toLowerCase()}`}
+              className="border-y border-separator-border py-4"
+            >
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
+                    Brasil · {selectedTurn}º turno
+                  </p>
+                  <h2 className="mt-1 text-title-3-semibold text-text-primary">Estatísticas da apuração</h2>
+                </div>
+                <p className="text-caption-1-regular text-text-tertiary">
+                  Atualização do TSE: {selectedResults?.updatedAt ?? "aguardando arquivo"}
+                </p>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-5 sm:grid-cols-3 xl:grid-cols-4">
+                <div className="border-t border-separator-border py-3">
+                  <dt className="text-caption-1-regular text-text-tertiary">Eleitorado apto</dt>
+                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {formatNumber(selectedResults?.statistics.eligibleVoters)}
+                  </dd>
+                </div>
+                <div className="border-t border-separator-border py-3">
+                  <dt className="text-caption-1-regular text-text-tertiary">Comparecimento</dt>
+                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {formatNumber(selectedResults?.statistics.voters)}
+                  </dd>
+                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
+                    {formatPercent(
+                      selectedResults?.statistics.eligibleVoters && selectedResults.statistics.voters != null
+                        ? (selectedResults.statistics.voters / selectedResults.statistics.eligibleVoters) * 100
+                        : null,
+                    )} do eleitorado
+                  </dd>
+                </div>
+                <div className="border-t border-separator-border py-3">
+                  <dt className="text-caption-1-regular text-text-tertiary">Abstenções</dt>
+                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {formatNumber(selectedResults?.statistics.abstentions)}
+                  </dd>
+                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
+                    {formatPercent(selectedResults?.statistics.abstentionPercentage)} do eleitorado
+                  </dd>
+                </div>
+                <div className="border-t border-separator-border py-3">
+                  <dt className="text-caption-1-regular text-text-tertiary">Votos válidos</dt>
+                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {formatNumber(selectedResults?.statistics.validVotes)}
+                  </dd>
+                </div>
+                <div className="border-t border-separator-border py-3">
+                  <dt className="text-caption-1-regular text-text-tertiary">Votos em branco</dt>
+                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {formatNumber(selectedResults?.statistics.blankVotes)}
+                  </dd>
+                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
+                    {formatPercent(
+                      selectedResults?.statistics.voters && selectedResults.statistics.blankVotes != null
+                        ? (selectedResults.statistics.blankVotes / selectedResults.statistics.voters) * 100
+                        : null,
+                    )} dos votantes
+                  </dd>
+                </div>
+                <div className="border-t border-separator-border py-3">
+                  <dt className="text-caption-1-regular text-text-tertiary">Votos nulos</dt>
+                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {formatNumber(selectedResults?.statistics.nullVotes)}
+                  </dd>
+                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
+                    {formatPercent(
+                      selectedResults?.statistics.voters && selectedResults.statistics.nullVotes != null
+                        ? (selectedResults.statistics.nullVotes / selectedResults.statistics.voters) * 100
+                        : null,
+                    )} dos votantes
+                  </dd>
+                </div>
+                <div className="border-t border-separator-border py-3">
+                  <dt className="text-caption-1-regular text-text-tertiary">Seções totalizadas</dt>
+                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {selectedResults?.sections.counted == null
+                      ? "—"
+                      : `${formatNumber(selectedResults.sections.counted)} / ${formatNumber(selectedResults.sections.total)}`}
+                  </dd>
+                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
+                    {formatPercent(selectedResults?.sections.percentage)}
+                  </dd>
+                </div>
+              </dl>
             </section>
 
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">
-              <CandidatePanel
-                title={selectedTurn === 1 ? "Primeiro turno" : "Segundo turno · 25 de outubro"}
-                subtitle={selectedTurn === 1 ? "Resultado oficial · Brasil" : "Apuração nacional ao vivo"}
-                results={selectedResults}
-                loading={loading}
-                error={selectedError}
-                turn={selectedTurn}
-              />
+            <CandidatePanel
+              title={selectedTurn === 1 ? "Primeiro turno" : "Segundo turno · 25 de outubro"}
+              subtitle={selectedTurn === 1 ? "Resultado oficial · Brasil" : "Apuração nacional ao vivo"}
+              results={selectedResults}
+              loading={loading}
+              error={selectedError}
+              turn={selectedTurn}
+            />
 
-              <ElectionMap
-                selectedState={null}
-                selectedMunicipality={null}
-                turn={selectedTurn}
-                preview
-                onSelectState={(_feature: MapFeature | null) => router.push("/mapa-apuracoes")}
-                onSelectMunicipality={() => router.push("/mapa-apuracoes")}
-              />
-            </div>
+            <ElectionRegions turn={selectedTurn} />
 
             <ElectionEvolutionChart turn={selectedTurn} results={selectedResults} />
 

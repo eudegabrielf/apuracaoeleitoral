@@ -1,9 +1,31 @@
-# Contributing
+# Contribuindo
 
-This repository is generated. Every file in it is exported from BoardUI's
-source by `npm run export:starter`, and the next export overwrites whatever
-is here. Pull requests therefore cannot be merged, and a workflow closes them
-automatically with this explanation.
+Issues e pull requests são bem-vindos. Para mudanças maiores, abra uma issue primeiro para alinhar o escopo.
 
-Found a bug, or want something changed? Email hi@boardui.com and it will be fixed at the source, where it reaches the
-starter, the CLI and the docs together.
+## Ambiente local
+
+Use Node.js 20.9 ou superior e npm:
+
+```bash
+npm ci
+npm run dev
+```
+
+Antes de enviar um pull request, execute as verificações:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+## Diretrizes
+
+- Use dados publicados pelo TSE; não estime votos nem preencha resultados ausentes.
+- Mantenha a atribuição dos dados e das malhas ao TSE e ao IBGE.
+- Siga os tokens semânticos e componentes já usados na interface.
+- Não inclua chaves, tokens ou outros segredos em commits.
+- Descreva o comportamento alterado e as verificações realizadas no pull request.
+
+## Contato
+
+Projeto mantido por [Eude Gabriel](https://github.com/eudegabrielf). Use as [issues do GitHub](https://github.com/eudegabrielf/apuracaoeleitoral/issues) para reportar problemas ou sugerir melhorias.

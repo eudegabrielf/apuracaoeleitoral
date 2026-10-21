@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Start BoardUI development server",
+			"label": "Start apuracaoeleitoral development server",
 			"type": "shell",
 			"command": "npm",
 			"args": [

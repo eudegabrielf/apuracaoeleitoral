@@ -1,7 +1,21 @@
 {
-  "name": "boardui-chat-starter",
+  "name": "apuracaoeleitoral",
   "version": "0.1.0",
+  "description": "Painel open-source de apuração presidencial com dados oficiais do TSE e mapas do IBGE.",
   "private": true,
+  "author": "Eude Gabriel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eudegabrielf/apuracaoeleitoral.git"
+  },
+  "homepage": "https://github.com/eudegabrielf/apuracaoeleitoral#readme",
+  "bugs": {
+    "url": "https://github.com/eudegabrielf/apuracaoeleitoral/issues"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,22 +23,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.47",
-    "@ai-sdk/google": "^4.0.61",
-    "@ai-sdk/openai": "^4.0.53",
-    "@ai-sdk/react": "^4.0.90",
-    "@internationalized/date": "^3.12.1",
     "@remixicon/react": "^4.9.0",
-    "@tanstack/react-table": "^8.21.3",
-    "ai": "^7.0.87",
-    "motion": "^12.42.2",
-    "next": "16.3.3",
+    "next": "^16.4.2",
     "react": "19.2.4",
     "react-aria-components": "^1.17.0",
     "react-dom": "19.2.4",
     "recharts": "^3.9.2",
-    "tailwind-merge": "^3.6.0",
-    "zod": "^4.5.4"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

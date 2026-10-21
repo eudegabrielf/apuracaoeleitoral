@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------
- * BoardUI theme tokens
+ * ApuracaoEleitoral theme tokens
  *
  * Layered as Tailwind v4 expects:
  *   @theme { ... }     primitives + ramp overrides → Tailwind utilities
@@ -267,26 +267,6 @@
   --color-segmented-control-selected-background: var(--color-white);
   --color-theme-toggle-sidebar-background:       var(--color-neutral-200);
   --color-theme-toggle-sidebar-selected-background: var(--color-white);
-  /* Stepped against the composer: the pill is white and the add button is the
-   * subtle grey sitting on it, so the control separates from the surface it
-   * shares an edge with. Dark mode keeps its own pair, where the pill is the
-   * lighter of the two and the button steps the other way. */
-  --color-ai-chat-composer-add-background:       var(--color-neutral-100);
-  --color-ai-chat-composer-add-hover-background: var(--color-neutral-200);
-  /* Composer Panel (Figma node 4430:12203): the status tab hanging off the
-   * card's top edge and the card's plus button are both neutral-200 in light
-   * mode. Dark mode steps them up instead, so they still separate from the
-   * neutral-800 card they touch. */
-  --color-composer-panel-tab-background:         var(--color-neutral-200);
-  --color-composer-panel-add-background:         var(--color-neutral-200);
-  --color-composer-panel-add-hover-background:   var(--color-neutral-300);
-  /* Attachment tile edge: the Figma neutral-200 in light mode; dark mode
-   * uses a translucent white so the ring reads on the neutral-800 card
-   * (border/button/default is one neutral step away there and vanishes). */
-  --color-composer-panel-tile-border:            var(--color-neutral-200);
-  /* Model picker provider rail: background/secondary in light mode, at
-   * half opacity in dark so it recedes on the neutral-800 panel. */
-  --color-composer-panel-rail-background:        var(--color-neutral-100);
   /* Questionnaire (Figma nodes 4435:14749 / 4435:15042): the answer rows share
    * the card's background/primary surface in both modes, separated by their
    * border alone, and the "Other" row uses the stock Input untouched. The
@@ -492,13 +472,6 @@
   --color-segmented-control-selected-background: var(--color-neutral-800);
   --color-theme-toggle-sidebar-background:       var(--color-neutral-800);
   --color-theme-toggle-sidebar-selected-background: var(--color-neutral-700);
-  --color-ai-chat-composer-add-background:       var(--color-neutral-700);
-  --color-ai-chat-composer-add-hover-background: var(--color-neutral-600);
-  --color-composer-panel-tab-background:         color-mix(in srgb, var(--color-neutral-700) 50%, transparent);
-  --color-composer-panel-add-background:         var(--color-neutral-700);
-  --color-composer-panel-add-hover-background:   var(--color-neutral-600);
-  --color-composer-panel-tile-border:            color-mix(in srgb, var(--color-white) 14%, transparent);
-  --color-composer-panel-rail-background:        color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
   --color-questionnaire-key-background:          var(--color-neutral-700);
   --color-questionnaire-key-hover-background:    var(--color-neutral-600);
   --color-agent-progress-ring:                     color-mix(in srgb, var(--color-white) 50%, transparent);
@@ -737,13 +710,6 @@
   --color-segmented-control-selected-background: var(--color-segmented-control-selected-background);
   --color-theme-toggle-sidebar-background:       var(--color-theme-toggle-sidebar-background);
   --color-theme-toggle-sidebar-selected-background: var(--color-theme-toggle-sidebar-selected-background);
-  --color-ai-chat-composer-add-background:       var(--color-ai-chat-composer-add-background);
-  --color-ai-chat-composer-add-hover-background: var(--color-ai-chat-composer-add-hover-background);
-  --color-composer-panel-tab-background:         var(--color-composer-panel-tab-background);
-  --color-composer-panel-add-background:         var(--color-composer-panel-add-background);
-  --color-composer-panel-add-hover-background:   var(--color-composer-panel-add-hover-background);
-  --color-composer-panel-tile-border:            var(--color-composer-panel-tile-border);
-  --color-composer-panel-rail-background:        var(--color-composer-panel-rail-background);
   --color-questionnaire-key-background:          var(--color-questionnaire-key-background);
   --color-questionnaire-key-hover-background:    var(--color-questionnaire-key-hover-background);
   --color-agent-progress-ring:                     var(--color-agent-progress-ring);

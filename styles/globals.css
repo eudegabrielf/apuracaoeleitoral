@@ -30,42 +30,6 @@
   mix-blend-mode: normal;
 }
 
-@keyframes ai-chat-text-shimmer {
-  from {
-    background-position: 200% center;
-  }
-
-  to {
-    background-position: -100% center;
-  }
-}
-
-.agent-progress-loading-text {
-  color: transparent;
-  background-image: linear-gradient(
-    100deg,
-    var(--color-text-secondary) 16%,
-    var(--color-text-secondary) 38%,
-    var(--color-text-primary) 50%,
-    var(--color-text-secondary) 62%,
-    var(--color-text-secondary) 84%
-  );
-  background-position: 200% center;
-  background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  animation: ai-chat-text-shimmer 3.4s linear infinite;
-  will-change: background-position;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .agent-progress-loading-text {
-    color: var(--color-text-secondary);
-    background-image: none;
-    animation: none;
-  }
-}
-
 ::view-transition-old(root) {
   z-index: 1;
 }
@@ -104,7 +68,7 @@ body {
   color: var(--color-text-primary);
 }
 
-/* Theme-aware monochrome BoardUI mark. Both images keep their intrinsic
+/* Theme-aware monochrome app mark. Both images keep their intrinsic
  * dimensions while the root theme class decides which one participates in
  * layout, avoiding a light-logo flash during hydration. */
 .theme-logo-dark,
@@ -727,138 +691,6 @@ input[type="search"]::-webkit-search-cancel-button {
 .bui-table.bui-table-sm th,
 .bui-table.bui-table-sm td {
   @apply px-2.5 py-1.5 text-body-2-medium;
-}
-
-/* Agent Thinking (components/application/agent-thinking): the agent thinking state
- * above a chat composer. The label reuses the ai-chat-text-shimmer travel;
- * its base/highlight both derive from the tone the component sets via
- * --bui-agent-thinking-tone, so every tone shimmers consistently. */
-.bui-agent-thinking-label {
-  color: transparent;
-  background-image: linear-gradient(
-    100deg,
-    color-mix(in oklab, var(--bui-agent-thinking-tone) 55%, transparent) 30%,
-    var(--bui-agent-thinking-tone) 50%,
-    color-mix(in oklab, var(--bui-agent-thinking-tone) 55%, transparent) 70%
-  );
-  background-position: 200% center;
-  background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  animation: ai-chat-text-shimmer 2.6s linear infinite;
-  will-change: background-position;
-}
-
-/* Star sparkle: scale + fade in, settle, and vanish; per-star duration and
- * stagger come in via inline animation-duration/-delay. */
-@keyframes bui-agent-thinking-star {
-  0%,
-  100% {
-    transform: scale(0);
-    opacity: 0;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  60% {
-    transform: scale(0.8);
-    opacity: 0.9;
-  }
-}
-
-.bui-agent-thinking-star {
-  transform: scale(0);
-  animation-name: bui-agent-thinking-star;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-/* Infinity comet: the dash segment laps the normalized (pathLength=100)
- * figure-eight once per animation-duration. */
-@keyframes bui-agent-thinking-dash {
-  to {
-    stroke-dashoffset: -100;
-  }
-}
-
-.bui-agent-thinking-comet {
-  animation-name: bui-agent-thinking-dash;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bui-agent-thinking-label {
-    color: var(--bui-agent-thinking-tone);
-    background-image: none;
-    animation: none;
-  }
-
-  /* Stars rest visible instead of frozen at scale(0). */
-  .bui-agent-thinking-star {
-    animation: none;
-    transform: none;
-    opacity: 0.7;
-  }
-
-  .bui-agent-thinking-comet {
-    animation: none;
-  }
-}
-
-/* Star glyphs read a touch heavier than the dot grids on light backgrounds;
- * soften only them (not the label) there. Dark mode keeps the full tone. */
-.bui-agent-thinking-stars {
-  color: color-mix(in oklab, currentColor 75%, transparent);
-}
-
-.dark .bui-agent-thinking-stars {
-  color: inherit;
-}
-
-/* Composer Loader (components/application/composer-loader): the light band
- * orbiting the composer while the agent works. Dash segments on a
- * pathLength-normalized SVG stroke — the offset laps once per duration. */
-@keyframes bui-composer-loader-dash {
-  from {
-    stroke-dashoffset: 0;
-  }
-
-  to {
-    stroke-dashoffset: -100;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bui-composer-loader-rect {
-    animation: none !important;
-  }
-}
-
-/* Composer mic listening state (components/application/ai-chat): equalizer
- * bars dancing while voice input is active. Per-bar duration/delay come in
- * inline so the bars drift out of phase like real audio. */
-@keyframes bui-composer-mic-bars {
-  0%,
-  100% {
-    transform: scaleY(0.4);
-  }
-
-  50% {
-    transform: scaleY(1);
-  }
-}
-
-.bui-composer-mic-bar {
-  animation: bui-composer-mic-bars 0.9s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bui-composer-mic-bar {
-    animation: none;
-    transform: scaleY(0.7);
-  }
 }
 
 /* Shimmer sweep on a primary call to action (the Pro prompt card). */

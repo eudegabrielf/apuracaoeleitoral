@@ -115,7 +115,7 @@ function isSnapshot(value: unknown): value is Snapshot {
 }
 
 function readSnapshots(turn: number): Snapshot[] {
-  const stored = window.localStorage.getItem(`boardui:election-history:${turn}`);
+  const stored = window.localStorage.getItem(`apuracaoeleitoral:election-history:${turn}`);
   if (!stored) return [];
   const parsed: unknown = JSON.parse(stored);
   if (!Array.isArray(parsed) || !parsed.every(isSnapshot)) {
@@ -235,7 +235,7 @@ export function ElectionEvolutionChart({
   useEffect(() => {
     if (turn === 1 || loadedTurn !== turn || snapshots.length === 0) return;
     try {
-      window.localStorage.setItem(`boardui:election-history:${turn}`, JSON.stringify(snapshots));
+      window.localStorage.setItem(`apuracaoeleitoral:election-history:${turn}`, JSON.stringify(snapshots));
       setHistoryError(null);
     } catch (reason) {
       setHistoryError(reason instanceof Error ? reason.message : "Não foi possível salvar o histórico local.");

@@ -82,7 +82,7 @@ function ThemeToggle() {
     const root = document.documentElement;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const applySystem = () => {
-      if (!window.localStorage.getItem("boardui:theme")) {
+      if (!window.localStorage.getItem("apuracaoeleitoral:theme")) {
         root.classList.toggle("dark", media.matches);
         setDark(media.matches);
       }
@@ -101,7 +101,7 @@ function ThemeToggle() {
   const toggle = () => {
     const next = !document.documentElement.classList.contains("dark");
     document.documentElement.classList.toggle("dark", next);
-    window.localStorage.setItem("boardui:theme", next ? "dark" : "light");
+    window.localStorage.setItem("apuracaoeleitoral:theme", next ? "dark" : "light");
     setDark(next);
   };
 
@@ -508,7 +508,14 @@ export function ElectionDashboard() {
                 <p className="text-caption-1-regular tabular-nums text-text-tertiary">
                   Última atualização oficial: {lastSync}
                 </p>
-                <p className="text-caption-1-medium text-text-secondary">Desenvolvido por Eude Gabriel</p>
+                <a
+                  href="https://github.com/eudegabrielf"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-caption-1-medium text-text-secondary hover:text-text-primary"
+                >
+                  Desenvolvido por Eude Gabriel
+                </a>
               </div>
             </footer>
           </div>

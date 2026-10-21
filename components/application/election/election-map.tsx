@@ -570,7 +570,7 @@ export function ElectionMap({
         ? "Carregando municípios…"
         : selectedMunicipality && selectedMunicipalityLoading
           ? "Consultando município no TSE…"
-          : loadingElectionResults && !electionResults
+          : selectedState && loadingElectionResults && !electionResults
             ? "Consultando resultados do mapa…"
             : null;
 
@@ -581,7 +581,7 @@ export function ElectionMap({
           aria-hidden="true"
           className="pointer-events-none fixed inset-x-3 bottom-3 z-[60] flex items-center gap-2 rounded-xl border border-border-button-default bg-background-primary-default p-3 text-body-2-medium text-text-secondary shadow-card sm:hidden"
         >
-          <RiLoader4Line className="size-4 shrink-0 animate-spin text-accent-500" />
+            <RiLoader4Line className="size-4 shrink-0 animate-spin text-text-primary" />
           <span>{mobileLoadingMessage}</span>
         </div>
       )}
@@ -707,7 +707,7 @@ export function ElectionMap({
               <ElectionSkeleton className="h-3 w-48" />
             </div>
           )}
-          {loadingElectionResults && !electionResults && !resultsError && (
+          {selectedState && loadingElectionResults && !electionResults && !resultsError && (
             <div role="status" aria-label="Consultando resultados oficiais" className="mb-3 flex items-center gap-3 rounded-xl bg-background-tertiary-default p-3">
               <span className="sr-only">Consultando resultados oficiais do TSE…</span>
               <ElectionSkeleton className="size-4 rounded-full" />

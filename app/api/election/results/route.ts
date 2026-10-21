@@ -189,6 +189,11 @@ export async function GET(request: Request) {
   const sections = payload.s ?? {};
   const electors = payload.e ?? {};
   const votes = payload.v ?? {};
+  const eligibleVoters = parseCount(electors.te);
+  const voters = parseCount(votes.tv);
+  const abstentions = eligibleVoters !== null && voters !== null
+    ? eligibleVoters - voters
+    : null;
 
   return NextResponse.json(
     {
@@ -207,8 +212,12 @@ export async function GET(request: Request) {
         percentage: parseCount(sections.pstn ?? sections.pst),
       },
       statistics: {
-        eligibleVoters: parseCount(electors.te),
-        voters: parseCount(votes.tv),
+        eligibleVoters,
+        voters,
+        abstentions,
+        abstentionPercentage: abstentions !== null && eligibleVoters
+          ? (abstentions / eligibleVoters) * 100
+          : null,
         validVotes: parseCount(votes.vv),
         blankVotes: parseCount(votes.vb),
         nullVotes: parseCount(votes.vn),

@@ -25,6 +25,8 @@ type Results = {
   statistics: {
     eligibleVoters: number | null;
     voters: number | null;
+    abstentions: number | null;
+    abstentionPercentage: number | null;
     validVotes: number | null;
     blankVotes: number | null;
     nullVotes: number | null;
@@ -174,6 +176,17 @@ export function ElectionRegions() {
                   <p className="text-caption-1-regular text-text-tertiary">Seções totalizadas</p>
                   <p className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
                     {results.sections.percentage?.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) ?? "—"}%
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-background-secondary-default p-3">
+                  <p className="text-caption-1-regular text-text-tertiary">Abstenções</p>
+                  <p className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
+                    {results.statistics.abstentions?.toLocaleString("pt-BR") ?? "—"}
+                  </p>
+                  <p className="text-caption-1-regular tabular-nums text-text-secondary">
+                    {results.statistics.abstentionPercentage == null
+                      ? "Percentual indisponível"
+                      : `${results.statistics.abstentionPercentage.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% do eleitorado`}
                   </p>
                 </div>
               </div>

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  RiArrowRightLine,
   RiBarChartBoxLine,
   RiDashboardLine,
   RiExternalLinkLine,
@@ -14,6 +13,7 @@ import {
   RiRefreshLine,
   RiSunLine,
   RiTimeLine,
+  RiUserLine,
 } from "@remixicon/react";
 import { Badge } from "@/components/base/badges/badge";
 import { Button, ButtonLink } from "@/components/base/buttons/button";
@@ -41,6 +41,8 @@ export type ElectionResults = {
   statistics: {
     eligibleVoters: number | null;
     voters: number | null;
+    abstentions: number | null;
+    abstentionPercentage: number | null;
     validVotes: number | null;
     blankVotes: number | null;
     nullVotes: number | null;
@@ -135,36 +137,30 @@ async function fetchResults(turn: number, uf = "br", municipality?: string): Pro
   return result as ElectionResults;
 }
 
-function ResultLink({
-  href,
+function ResultCard({
   icon: Icon,
   title,
   value,
   detail,
 }: {
-  href: string;
   icon: typeof RiBarChartBoxLine;
   title: string;
   value: string;
   detail: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="group flex min-w-0 flex-col justify-between gap-5 rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card transition-colors hover:bg-background-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
-    >
-      <div className="flex items-center justify-between gap-3">
+    <div className="flex min-w-0 flex-col justify-between gap-5 rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card">
+      <div className="flex items-center gap-3">
         <span className="rounded-xl bg-background-secondary-default p-2.5 text-foreground-icon-secondary">
           <Icon className="size-5" aria-hidden />
         </span>
-        <RiArrowRightLine className="size-5 text-foreground-icon-tertiary transition-transform group-hover:translate-x-1" aria-hidden />
       </div>
       <div className="min-w-0">
         <p className="text-body-2-medium text-text-secondary">{title}</p>
         <p className="mt-1 truncate text-title-2-medium tabular-nums text-text-primary">{value}</p>
         <p className="mt-1 text-caption-1-regular text-text-tertiary">{detail}</p>
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -253,8 +249,8 @@ function CandidatePanel({
         </div>
       ) : candidates.length > 0 ? (
         <div className="mt-5 flex flex-col gap-5">
-          {candidates.slice(0, turn === 1 ? 5 : 2).map((candidate, index) => (
-            <CandidateResult key={candidate.id} candidate={candidate} rank={index + 1} />
+          {candidates.map((candidate, index) => (
+            <CandidateResult key={candidate.id} candidate={candidate} rank={index + 1} compact />
           ))}
         </div>
       ) : (
@@ -287,7 +283,6 @@ function Sidebar() {
   const navigation = [
     { label: "Visão geral", href: "/", icon: RiDashboardLine },
     { label: "Mapa e localidades", href: "/mapa-apuracoes", icon: RiMap2Line },
-    { label: "Resultados", href: "/dados/votos-validos", icon: RiBarChartBoxLine },
   ];
 
   return (
@@ -375,7 +370,6 @@ export function ElectionDashboard() {
   const selectedResults = selectedTurn === 1 ? firstRound : liveResults;
   const selectedError = selectedTurn === 1 ? firstRoundError : liveError;
   const selectedTurnName = selectedTurn === 1 ? "Primeiro turno" : "Segundo turno";
-  const selectedTurnSuffix = `turn=${selectedTurn}`;
   const isWaitingForRunoff =
     selectedTurn === 2 &&
     selectedResults != null &&
@@ -500,22 +494,19 @@ export function ElectionDashboard() {
             )}
 
             <section aria-label={`Indicadores nacionais do ${selectedTurnName.toLowerCase()}`} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <ResultLink
-                href={`/dados/votos-validos?${selectedTurnSuffix}`}
+              <ResultCard
                 icon={RiBarChartBoxLine}
                 title={`Votos válidos · ${selectedTurn}º turno`}
                 value={formatNumber(selectedResults?.statistics.validVotes)}
                 detail="Resultado presidencial oficial"
               />
-              <ResultLink
-                href={`/dados/eleitorado?${selectedTurnSuffix}`}
+              <ResultCard
                 icon={RiDashboardLine}
                 title="Eleitorado apto"
                 value={formatNumber(selectedResults?.statistics.eligibleVoters)}
                 detail="Total de eleitores registrados"
               />
-              <ResultLink
-                href={`/dados/secoes?${selectedTurnSuffix}`}
+              <ResultCard
                 icon={RiMap2Line}
                 title="Seções totalizadas"
                 value={
@@ -525,12 +516,41 @@ export function ElectionDashboard() {
                 }
                 detail={formatPercent(selectedResults?.sections.percentage)}
               />
-              <ResultLink
-                href={`/dados/comparecimento?${selectedTurnSuffix}`}
+              <ResultCard
                 icon={RiTimeLine}
                 title={`Comparecimento · ${selectedTurn}º turno`}
                 value={formatNumber(selectedResults?.statistics.voters)}
-                detail="Votantes registrados na apuração"
+                detail={`${formatPercent(
+                  selectedResults?.statistics.eligibleVoters && selectedResults.statistics.voters != null
+                    ? (selectedResults.statistics.voters / selectedResults.statistics.eligibleVoters) * 100
+                    : null,
+                )} do eleitorado apto`}
+              />
+              <ResultCard
+                icon={RiUserLine}
+                title={`Abstenções · ${selectedTurn}º turno`}
+                value={formatNumber(selectedResults?.statistics.abstentions)}
+                detail={`${formatPercent(selectedResults?.statistics.abstentionPercentage)} do eleitorado apto`}
+              />
+              <ResultCard
+                icon={RiBarChartBoxLine}
+                title="Votos em branco"
+                value={formatNumber(selectedResults?.statistics.blankVotes)}
+                detail={`${formatPercent(
+                  selectedResults?.statistics.voters && selectedResults.statistics.blankVotes != null
+                    ? (selectedResults.statistics.blankVotes / selectedResults.statistics.voters) * 100
+                    : null,
+                )} dos votos registrados`}
+              />
+              <ResultCard
+                icon={RiBarChartBoxLine}
+                title="Votos nulos"
+                value={formatNumber(selectedResults?.statistics.nullVotes)}
+                detail={`${formatPercent(
+                  selectedResults?.statistics.voters && selectedResults.statistics.nullVotes != null
+                    ? (selectedResults.statistics.nullVotes / selectedResults.statistics.voters) * 100
+                    : null,
+                )} dos votos registrados`}
               />
             </section>
 

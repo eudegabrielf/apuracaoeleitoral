@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RiAddLine, RiArrowUpLine, RiMapPin2Line, RiRestartLine, RiSubtractLine } from "@remixicon/react";
+import { RiAddLine, RiArrowLeftLine, RiArrowUpLine, RiMapPin2Line, RiRestartLine, RiSearchLine, RiSubtractLine } from "@remixicon/react";
 import { Button } from "@/components/base/buttons/button";
-import { Select, SelectItem } from "@/components/base/select/select";
+import { Input } from "@/components/base/input/input";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
 import { cx } from "@/utils/cx";
 
@@ -75,7 +75,9 @@ const mapStateFlags: Record<string, string> = {
   se: "https://commons.wikimedia.org/wiki/Special:FilePath/Bandeira%20de%20Sergipe.svg?width=96",
   to: "https://commons.wikimedia.org/wiki/Special:FilePath/Bandeira%20do%20Tocantins.svg?width=96",
 };
-const municipalityZoomLevel = 2.2;
+function normalizeSearch(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+}
 
 function getWinnerIntensity(winner: LocalityWinner | undefined) {
   const first = winner?.leaders[0];
@@ -104,21 +106,6 @@ function featureBounds(feature: MapFeature): Bounds {
     }),
     { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
   );
-}
-
-function featureCenter(feature: MapFeature, bounds: Bounds): Position {
-  const centerBounds = featureBounds(feature);
-  const centerX = (centerBounds.minX + centerBounds.maxX) / 2;
-  const centerY = (centerBounds.minY + centerBounds.maxY) / 2;
-  const width = 640;
-  const height = 580;
-  const padding = 8;
-  const rangeX = Math.max(bounds.maxX - bounds.minX, 0.01);
-  const rangeY = Math.max(bounds.maxY - bounds.minY, 0.01);
-  const scale = Math.min((width - padding * 2) / rangeX, (height - padding * 2) / rangeY);
-  const offsetX = (width - rangeX * scale) / 2;
-  const offsetY = (height - rangeY * scale) / 2;
-  return [offsetX + (centerX - bounds.minX) * scale, height - offsetY - (centerY - bounds.minY) * scale];
 }
 
 function featurePath(feature: MapFeature, bounds: Bounds): string {
@@ -172,71 +159,30 @@ export function ElectionMap({
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [hoveredFeature, setHoveredFeature] = useState<HoveredFeature | null>(null);
   const [pinnedFeature, setPinnedFeature] = useState<HoveredFeature | null>(null);
+  const [municipalityQuery, setMunicipalityQuery] = useState("");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapSvgRef = useRef<SVGSVGElement>(null);
-  const boundsRef = useRef<Bounds | null>(null);
   const zoomRef = useRef(1);
-  const focusedFeatureRef = useRef<MapFeature | null>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
   const suppressClickRef = useRef(false);
   const stateFeatures = states?.features ?? [];
   const municipalityFeatures = municipalities?.features ?? [];
   const features = useMemo(
-    () => [...stateFeatures, ...municipalityFeatures],
-    [municipalityFeatures, stateFeatures],
+    () => selectedState
+      ? municipalityFeatures.filter((feature) => feature.properties.sigla === selectedState.properties.sigla)
+      : stateFeatures,
+    [municipalityFeatures, selectedState, stateFeatures],
   );
-  const stateIdsByUf = useMemo(
-    () => new Map(stateFeatures.map((feature) => [feature.properties.sigla?.toUpperCase() ?? "", feature.properties.id ?? ""])),
-    [stateFeatures],
-  );
-
-  const zoomMap = useCallback((requestedZoom: number, feature?: MapFeature) => {
-    const nextZoom = Math.max(1, Math.min(4, requestedZoom));
-    if (feature?.properties.id?.length === 2 && nextZoom >= municipalityZoomLevel) {
-      const bounds = boundsRef.current;
-      if (bounds) {
-        const [centerX, centerY] = featureCenter(feature, bounds);
-        setPan({ x: (320 - centerX) * nextZoom, y: (290 - centerY) * nextZoom });
-      }
-      zoomRef.current = nextZoom;
-      setZoom(nextZoom);
-      focusedFeatureRef.current = feature;
-      if (selectedState?.properties.id !== feature.properties.id) {
-        onSelectMunicipality(null);
-        onSelectState(feature);
-      }
-      return;
-    }
-    if (selectedState && nextZoom < municipalityZoomLevel) {
-      zoomRef.current = 1;
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-      focusedFeatureRef.current = null;
-      onSelectMunicipality(null);
-      onSelectState(null);
-      return;
-    }
-    zoomRef.current = nextZoom;
-    setZoom(nextZoom);
-  }, [onSelectMunicipality, onSelectState, selectedState]);
-
-  const getZoomFeature = () => {
-    if (focusedFeatureRef.current) return focusedFeatureRef.current;
-    const map = mapSvgRef.current;
-    if (!map) return undefined;
-    const bounds = map.getBoundingClientRect();
-    const target = document.elementFromPoint(
-      bounds.left + bounds.width / 2,
-      bounds.top + bounds.height / 2,
-    );
-    const path = target instanceof Element
-      ? target.closest<SVGPathElement>("path[data-map-feature-id]")
-      : null;
-    return features.find((feature) => feature.properties.id === path?.dataset.mapFeatureId);
-  };
+  const municipalitySuggestions = useMemo(() => {
+    const query = normalizeSearch(municipalityQuery.trim());
+    if (!query) return [];
+    return municipalityFeatures
+      .filter((feature) => normalizeSearch(`${feature.properties.nome ?? ""} ${feature.properties.sigla ?? ""}`).includes(query))
+      .slice(0, 8);
+  }, [municipalityFeatures, municipalityQuery]);
 
   useEffect(() => {
     const container = mapContainerRef.current;
@@ -245,16 +191,14 @@ export function ElectionMap({
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
       if (!mapSvgRef.current?.contains(event.target as Node)) return;
-      const path = event.target instanceof Element
-        ? event.target.closest<SVGPathElement>("path[data-map-feature-id]")
-        : null;
-      const feature = features.find((item) => item.properties.id === path?.dataset.mapFeatureId);
-      zoomMap(zoomRef.current + (event.deltaY < 0 ? 0.2 : -0.2), feature);
+      const nextZoom = Math.max(1, Math.min(4, zoomRef.current + (event.deltaY < 0 ? 0.2 : -0.2)));
+      zoomRef.current = nextZoom;
+      setZoom(nextZoom);
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
-  }, [features, zoomMap]);
+  }, [features]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -375,7 +319,9 @@ export function ElectionMap({
     focusedResults.stateId === selectedState.properties.id
     ? focusedResults.data
     : null;
-  const electionResults = focusedElectionResults ?? nationalMunicipalElectionResults ?? nationalElectionResults;
+  const electionResults = selectedState
+    ? focusedElectionResults ?? nationalMunicipalElectionResults ?? nationalElectionResults
+    : nationalElectionResults ?? nationalMunicipalElectionResults;
   const selectMunicipality = (feature: MapFeature) => {
     const stateFeature = stateFeatures.find(
       (state) => state.properties.sigla?.toUpperCase() === feature.properties.sigla?.toUpperCase(),
@@ -384,14 +330,15 @@ export function ElectionMap({
       onSelectState(stateFeature);
     }
     if (stateFeature) onSelectMunicipality(feature);
+    setMunicipalityQuery("");
+    setHoveredFeature(null);
+    setPinnedFeature(null);
   };
 
   useEffect(() => {
-    if (selectedState) return;
     zoomRef.current = 1;
     setZoom(1);
     setPan({ x: 0, y: 0 });
-    focusedFeatureRef.current = null;
   }, [selectedState]);
 
   useEffect(() => {
@@ -424,10 +371,6 @@ export function ElectionMap({
     }
     return paths;
   }, [bounds, features]);
-
-  useEffect(() => {
-    boundsRef.current = bounds;
-  }, [bounds]);
 
   const getTooltipPosition = useCallback((feature: MapFeature, clientX: number, clientY: number) => {
     const container = mapContainerRef.current;
@@ -493,36 +436,68 @@ export function ElectionMap({
           <h2 className="mt-1 text-title-3-semibold text-text-primary">
             {selectedMunicipality?.properties.nome ??
               selectedState?.properties.nome ??
-              "Brasil por município"}
+              "Brasil por estado"}
           </h2>
           <p className="mt-1 text-body-2-regular text-text-secondary">
             {preview
               ? "Passe o cursor para comparar as lideranças. Clique para abrir o mapa detalhado."
               : selectedState
                 ? "Selecione um município para consultar a apuração local."
-                : "Os municípios estão no mapa. Clique em uma cidade para consultar a apuração local."}
+                : "Clique em um estado para consultar as cidades."}
           </p>
         </div>
-        {!preview && states && (
-          <Select
-            aria-label="Focar um estado no mapa"
-            className="w-full sm:w-64"
-            selectedKey={selectedState?.properties.id ?? "br"}
-            onSelectionChange={(key) => {
-              const feature = states.features.find((state) => state.properties.id === key?.toString());
-              onSelectMunicipality(null);
-              if (feature) zoomMap(municipalityZoomLevel, feature);
-              else zoomMap(1);
-            }}
-          >
-            <SelectItem id="br">Brasil inteiro</SelectItem>
-            {states.features.map((feature) => (
-              <SelectItem key={feature.properties.id} id={feature.properties.id ?? ""}>
-                {feature.properties.nome} · {feature.properties.sigla}
-              </SelectItem>
-            ))}
-          </Select>
-        )}
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start">
+          {!preview && (
+            <div className="relative z-20 w-full sm:w-72">
+              <Input
+                aria-label="Pesquisar município"
+                placeholder="Pesquisar município"
+                leadingIcon={RiSearchLine}
+                value={municipalityQuery}
+                onChange={setMunicipalityQuery}
+                isDisabled={!states || !municipalities}
+                autoComplete="off"
+              />
+              {municipalityQuery.trim() && (
+                <div className="absolute start-0 top-full mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-border-button-default bg-background-primary-default p-2 shadow-card">
+                  {municipalitySuggestions.length > 0 ? (
+                    <ul className="flex flex-col gap-1" aria-label="Municípios encontrados">
+                      {municipalitySuggestions.map((feature) => (
+                        <li key={feature.properties.id}>
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            className="w-full justify-start"
+                            onClick={() => selectMunicipality(feature)}
+                          >
+                            {feature.properties.nome} · {feature.properties.sigla}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-2 py-1 text-body-2-regular text-text-secondary">
+                      Nenhum município encontrado.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {!preview && selectedState && (
+            <Button
+              variant="secondary"
+              size="small"
+              leadingIcon={RiArrowLeftLine}
+              onClick={() => {
+                onSelectMunicipality(null);
+                onSelectState(null);
+              }}
+            >
+              Voltar aos estados
+            </Button>
+          )}
+        </div>
       </div>
 
       {error ? (
@@ -572,7 +547,7 @@ export function ElectionMap({
           <svg
             ref={mapSvgRef}
             role="group"
-            aria-label="Municípios e estados do Brasil"
+            aria-label={selectedState ? `Municípios de ${selectedState.properties.nome}` : "Estados do Brasil"}
             viewBox="0 0 640 580"
             className={cx(
               "mx-auto block max-h-[560px] w-full touch-none select-none",
@@ -590,9 +565,8 @@ export function ElectionMap({
                 selectedState
                   ? selectedMunicipality?.properties.id === feature.properties.id
                   : false;
-              const stateId = stateIdsByUf.get(feature.properties.sigla?.toUpperCase() ?? "");
               const winner = feature.properties.id
-                ? electionResults?.results[feature.properties.id] ?? nationalElectionResults?.results[stateId ?? ""]
+                ? electionResults?.results[feature.properties.id]
                 : undefined;
               const candidate = electionResults?.candidates.find((entry) => entry.id === winner?.candidateId);
               const color = candidate ? getCandidateColor(candidate) : null;
@@ -612,7 +586,7 @@ export function ElectionMap({
                   className={cx(
                     "cursor-pointer stroke-background-primary-default transition-[fill,opacity] hover:opacity-80",
                     selected ? "stroke-accent-500" : "",
-                    selectedState ? "stroke-[0.75]" : feature.properties.id?.length === 2 ? "stroke-[2]" : "stroke-[0.35]",
+                    selectedState ? "stroke-[0.75]" : "stroke-[2]",
                     "outline-none focus-visible:stroke-accent-500 focus-visible:stroke-[3]",
                   )}
                   style={color
@@ -625,15 +599,14 @@ export function ElectionMap({
                       suppressClickRef.current = false;
                       return;
                     }
-                    if (feature.properties.id?.length === 2) {
-                      focusedFeatureRef.current = feature;
-                      zoomMap(Math.max(zoomRef.current, municipalityZoomLevel), feature);
+                    if (!selectedState) {
+                      onSelectMunicipality(null);
+                      onSelectState(feature);
                     } else {
                       selectMunicipality(feature);
                     }
                   }}
                   onPointerEnter={(event) => {
-                    focusedFeatureRef.current = feature;
                     setPinnedFeature(null);
                     showFeatureTooltip(feature, event.clientX, event.clientY);
                   }}
@@ -650,8 +623,9 @@ export function ElectionMap({
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      if (feature.properties.id?.length === 2) {
-                        zoomMap(Math.max(zoomRef.current, municipalityZoomLevel), feature);
+                      if (!selectedState) {
+                        onSelectMunicipality(null);
+                        onSelectState(feature);
                       } else {
                         selectMunicipality(feature);
                       }
@@ -678,7 +652,11 @@ export function ElectionMap({
               leadingIcon={RiSubtractLine}
               aria-label="Reduzir zoom do mapa"
               disabled={zoom <= 1}
-              onClick={() => setZoom((current) => Math.max(1, current - 0.2))}
+              onClick={() => {
+                const nextZoom = Math.max(1, zoomRef.current - 0.2);
+                zoomRef.current = nextZoom;
+                setZoom(nextZoom);
+              }}
             />
             <Button
               variant="secondary"
@@ -686,7 +664,11 @@ export function ElectionMap({
               leadingIcon={RiAddLine}
               aria-label="Aumentar zoom do mapa"
               disabled={zoom >= 4}
-              onClick={() => zoomMap(zoomRef.current + 0.2, getZoomFeature())}
+              onClick={() => {
+                const nextZoom = Math.min(4, zoomRef.current + 0.2);
+                zoomRef.current = nextZoom;
+                setZoom(nextZoom);
+              }}
             />
             <Button
               variant="secondary"
@@ -802,7 +784,7 @@ export function ElectionMap({
         <span className="inline-flex items-center gap-2 text-body-2-regular text-text-secondary">
           <RiMapPin2Line className="size-4" aria-hidden />
           {selectedState
-            ? `${municipalities?.features.length ?? 0} municípios disponíveis`
+            ? `${features.length} municípios disponíveis`
             : `${states?.features.length ?? 0} unidades da federação`}
         </span>
         {selectedState && (

@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  RiBarChartBoxLine,
   RiExternalLinkLine,
   RiMoonLine,
   RiRefreshLine,
@@ -303,10 +302,7 @@ export function ElectionDashboard() {
         <main className="min-w-0 rounded-3xl bg-background-full lg:px-2 lg:py-2">
           <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 pb-8">
             <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-button-default bg-background-primary-default px-5 py-3 shadow-card">
-              <div className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-background-secondary-default text-foreground-icon-primary lg:hidden">
-                  <RiBarChartBoxLine className="size-5" aria-hidden />
-                </span>
+              <div>
                 <div>
                   <p className="text-body-medium text-text-primary">Apuração</p>
                   <p className="text-caption-1-regular text-text-tertiary">Eleição presidencial · 2026</p>

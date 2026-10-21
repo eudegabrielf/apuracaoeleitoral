@@ -41,7 +41,7 @@ const styles = sortCx({
   },
   thumb: {
     blue: "bg-pill-tab-blue-selected-background",
-    gray: "bg-background-tertiary-default",
+    gray: "bg-background-tertiary-default dark:bg-background-quaternary-default",
   },
   hover: {
     blue: "bg-pill-tab-blue-hover-background",

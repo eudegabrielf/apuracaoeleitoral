@@ -15,6 +15,7 @@ import { PillTab, PillTabList } from "@/components/base/tabs/pill-tab";
 import { ElectionEvolutionChart } from "@/components/application/election/election-evolution-chart";
 import { ElectionRegions } from "@/components/application/election/election-regions";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
+import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
 import { cx } from "@/utils/cx";
 
 type Candidate = {
@@ -212,8 +213,22 @@ function CandidatePanel({
           </p>
         </div>
       ) : loading && !results ? (
-        <div className="mt-5 flex min-h-32 items-center justify-center text-body-regular text-text-secondary">
-          Carregando dados oficiais…
+        <div role="status" aria-label="Carregando resultados oficiais" className="mt-5 flex flex-col gap-5">
+          <span className="sr-only">Carregando dados oficiais do TSE…</span>
+          {Array.from({ length: 2 }, (_, index) => (
+            <div key={index} className="flex min-w-0 items-center gap-3">
+              <ElectionSkeleton className="size-10 rounded-full" />
+              <div className="min-w-0 flex-1">
+                <ElectionSkeleton className="h-4 w-2/3" />
+                <ElectionSkeleton className="mt-2 h-3 w-1/3" />
+                <ElectionSkeleton className="mt-2 h-1.5 w-full rounded-full" />
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <ElectionSkeleton className="h-4 w-20" />
+                <ElectionSkeleton className="h-3 w-12" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : candidates.length > 0 ? (
         <div className="mt-5 flex flex-col gap-5">
@@ -295,6 +310,7 @@ export function ElectionDashboard() {
     () => liveResults?.updatedAt ?? firstRound?.updatedAt ?? "Aguardando arquivo do TSE",
     [firstRound?.updatedAt, liveResults?.updatedAt],
   );
+  const initialResultsLoading = loading && !selectedResults && !selectedError;
 
   return (
     <div className="min-h-screen bg-background-full p-3 sm:p-4">
@@ -399,6 +415,7 @@ export function ElectionDashboard() {
 
             <section
               aria-label={`Estatísticas nacionais do ${selectedTurnName.toLowerCase()}`}
+              aria-busy={initialResultsLoading}
               className="border-y border-separator-border py-4"
             >
               <div className="flex flex-wrap items-end justify-between gap-3">
@@ -408,80 +425,84 @@ export function ElectionDashboard() {
                   </p>
                   <h2 className="mt-1 text-title-3-semibold text-text-primary">Estatísticas da apuração</h2>
                 </div>
-                <p className="text-caption-1-regular text-text-tertiary">
-                  Atualização do TSE: {selectedResults?.updatedAt ?? "aguardando arquivo"}
-                </p>
+                {initialResultsLoading ? (
+                  <ElectionSkeleton className="h-3.5 w-40" />
+                ) : (
+                  <p className="text-caption-1-regular text-text-tertiary">
+                    Atualização do TSE: {selectedResults?.updatedAt ?? "aguardando arquivo"}
+                  </p>
+                )}
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-5 sm:grid-cols-3 xl:grid-cols-4">
                 <div className="border-t border-separator-border py-3">
                   <dt className="text-caption-1-regular text-text-tertiary">Eleitorado apto</dt>
                   <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {formatNumber(selectedResults?.statistics.eligibleVoters)}
+                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-28" /> : formatNumber(selectedResults?.statistics.eligibleVoters)}
                   </dd>
                 </div>
                 <div className="border-t border-separator-border py-3">
                   <dt className="text-caption-1-regular text-text-tertiary">Comparecimento</dt>
                   <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {formatNumber(selectedResults?.statistics.voters)}
+                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-24" /> : formatNumber(selectedResults?.statistics.voters)}
                   </dd>
                   <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {formatPercent(
+                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : formatPercent(
                       selectedResults?.statistics.eligibleVoters && selectedResults.statistics.voters != null
                         ? (selectedResults.statistics.voters / selectedResults.statistics.eligibleVoters) * 100
                         : null,
-                    )} do eleitorado
+                    )}{!initialResultsLoading && " do eleitorado"}
                   </dd>
                 </div>
                 <div className="border-t border-separator-border py-3">
                   <dt className="text-caption-1-regular text-text-tertiary">Abstenções</dt>
                   <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {formatNumber(selectedResults?.statistics.abstentions)}
+                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-24" /> : formatNumber(selectedResults?.statistics.abstentions)}
                   </dd>
                   <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {formatPercent(selectedResults?.statistics.abstentionPercentage)} do eleitorado
+                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : `${formatPercent(selectedResults?.statistics.abstentionPercentage)} do eleitorado`}
                   </dd>
                 </div>
                 <div className="border-t border-separator-border py-3">
                   <dt className="text-caption-1-regular text-text-tertiary">Votos válidos</dt>
                   <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {formatNumber(selectedResults?.statistics.validVotes)}
+                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-24" /> : formatNumber(selectedResults?.statistics.validVotes)}
                   </dd>
                 </div>
                 <div className="border-t border-separator-border py-3">
                   <dt className="text-caption-1-regular text-text-tertiary">Votos em branco</dt>
                   <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {formatNumber(selectedResults?.statistics.blankVotes)}
+                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-20" /> : formatNumber(selectedResults?.statistics.blankVotes)}
                   </dd>
                   <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {formatPercent(
+                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : formatPercent(
                       selectedResults?.statistics.voters && selectedResults.statistics.blankVotes != null
                         ? (selectedResults.statistics.blankVotes / selectedResults.statistics.voters) * 100
                         : null,
-                    )} dos votantes
+                    )}{!initialResultsLoading && " dos votantes"}
                   </dd>
                 </div>
                 <div className="border-t border-separator-border py-3">
                   <dt className="text-caption-1-regular text-text-tertiary">Votos nulos</dt>
                   <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {formatNumber(selectedResults?.statistics.nullVotes)}
+                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-20" /> : formatNumber(selectedResults?.statistics.nullVotes)}
                   </dd>
                   <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {formatPercent(
+                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : formatPercent(
                       selectedResults?.statistics.voters && selectedResults.statistics.nullVotes != null
                         ? (selectedResults.statistics.nullVotes / selectedResults.statistics.voters) * 100
                         : null,
-                    )} dos votantes
+                    )}{!initialResultsLoading && " dos votantes"}
                   </dd>
                 </div>
                 <div className="border-t border-separator-border py-3">
                   <dt className="text-caption-1-regular text-text-tertiary">Seções totalizadas</dt>
                   <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {selectedResults?.sections.counted == null
+                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-28" /> : selectedResults?.sections.counted == null
                       ? "—"
                       : `${formatNumber(selectedResults.sections.counted)} / ${formatNumber(selectedResults.sections.total)}`}
                   </dd>
                   <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {formatPercent(selectedResults?.sections.percentage)}
+                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-16" /> : formatPercent(selectedResults?.sections.percentage)}
                   </dd>
                 </div>
               </dl>
@@ -498,7 +519,7 @@ export function ElectionDashboard() {
 
             <ElectionRegions turn={selectedTurn} />
 
-            <ElectionEvolutionChart turn={selectedTurn} results={selectedResults} />
+            <ElectionEvolutionChart turn={selectedTurn} results={selectedResults} loading={loading} />
 
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-separator-border px-1 pt-4">
               <p className="text-caption-1-regular text-text-tertiary">

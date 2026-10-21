@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
+import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
 import type { ElectionResults } from "@/components/application/election/election-dashboard";
 
 type Snapshot = {
@@ -171,9 +172,11 @@ function formatPercent(value: number | undefined) {
 export function ElectionEvolutionChart({
   turn,
   results,
+  loading,
 }: {
   turn: number;
   results: ElectionResults | null;
+  loading: boolean;
 }) {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loadedTurn, setLoadedTurn] = useState<number | null>(null);
@@ -246,6 +249,7 @@ export function ElectionEvolutionChart({
     ? firstRoundCandidates
     : results?.candidates.filter((candidate) => candidate.name.trim()).slice(0, 2) ?? [];
   const chartSnapshots = turn === 1 ? firstRoundHistory : snapshots;
+  const historyLoading = turn === 2 && (loadedTurn !== turn || (loading && !results));
   const visibleCandidateIds = new Set(chartCandidates.map((candidate) => candidate.id));
   const hourlyTicks = getHourlyTicks(chartSnapshots);
   const firstTimestamp = chartSnapshots[0]?.observedAt ?? 0;
@@ -277,7 +281,25 @@ export function ElectionEvolutionChart({
         </span>
       </div>
 
-      {turn === 2 && historyError ? (
+      {historyLoading ? (
+        <div role="status" aria-label="Carregando histórico da apuração" className="mt-5 space-y-4">
+          <span className="sr-only">Carregando histórico local da apuração…</span>
+          <div className="flex h-80 items-end gap-3 rounded-2xl bg-background-secondary-default p-5">
+            {Array.from({ length: 12 }, (_, index) => (
+              <ElectionSkeleton
+                key={index}
+                className="min-w-4 flex-1 rounded-t-md rounded-b-none"
+                style={{ height: `${24 + ((index * 17) % 63)}%` }}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-4">
+            {Array.from({ length: 3 }, (_, index) => (
+              <ElectionSkeleton key={index} className="h-4 w-28" />
+            ))}
+          </div>
+        </div>
+      ) : turn === 2 && historyError ? (
         <p role="alert" className="mt-5 rounded-xl bg-background-secondary-default p-4 text-body-2-regular text-text-primary">
           {historyError}
         </p>

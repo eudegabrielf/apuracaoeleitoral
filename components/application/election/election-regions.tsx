@@ -6,6 +6,7 @@ import { RiExternalLinkLine } from "@remixicon/react";
 import { Badge } from "@/components/base/badges/badge";
 import { ElectionMap, type MapFeature } from "@/components/application/election/election-map";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
+import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
 
 type Candidate = {
   id: string;
@@ -18,6 +19,7 @@ type Candidate = {
 
 type Results = {
   uf: string;
+  municipality: string | null;
   sourceUrl: string;
   updatedAt: string | null;
   sections: { total: number | null; counted: number | null; percentage: number | null };
@@ -109,6 +111,15 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
         <ElectionMap
           selectedState={state}
           selectedMunicipality={municipality}
+          selectedMunicipalityResults={
+            municipality && results?.municipality === municipality.properties.id ? results : null
+          }
+          selectedMunicipalityLoading={Boolean(
+            municipality && results?.municipality !== municipality.properties.id && !error,
+          )}
+          selectedMunicipalityError={
+            municipality && results?.municipality !== municipality.properties.id ? error : null
+          }
           turn={turn}
           onSelectState={(feature) => {
             setState(feature);
@@ -134,7 +145,29 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
                 {error}
               </p>
             ) : !results ? (
-              <p className="mt-4 text-body-regular text-text-secondary">Carregando publicação oficial…</p>
+              <div role="status" aria-label="Carregando resultado da localidade" className="mt-4 space-y-5">
+                <span className="sr-only">Consultando a publicação oficial do TSE…</span>
+                <dl className="grid grid-cols-2 gap-x-4 border-y border-separator-border sm:grid-cols-3">
+                  {Array.from({ length: 7 }, (_, index) => (
+                    <div key={index} className="space-y-2 py-3">
+                      <ElectionSkeleton className="h-3 w-20" />
+                      <ElectionSkeleton className="h-5 w-24" />
+                    </div>
+                  ))}
+                </dl>
+                <div className="flex flex-col divide-y divide-separator-border">
+                  {Array.from({ length: 3 }, (_, index) => (
+                    <div key={index} className="flex items-center gap-3 py-3">
+                      <ElectionSkeleton className="size-10 rounded-full" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <ElectionSkeleton className="h-4 w-2/3" />
+                        <ElectionSkeleton className="h-3 w-1/3" />
+                      </div>
+                      <ElectionSkeleton className="h-4 w-20" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <>
                 <dl className="mt-4 grid grid-cols-2 gap-x-4 border-y border-separator-border sm:grid-cols-3">

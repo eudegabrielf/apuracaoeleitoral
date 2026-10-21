@@ -6,6 +6,7 @@ import { RiAddLine, RiArrowLeftLine, RiArrowUpLine, RiMapPin2Line, RiRestartLine
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
+import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
 import { cx } from "@/utils/cx";
 
 export type Position = [number, number];
@@ -41,7 +42,13 @@ type ElectionMapResults = {
   updatedAt: string | null;
   sourceUrl: string;
 };
-type CachedMapResults = { turn: number; stateId: string | null; data: ElectionMapResults };
+type CachedMapResults = { turn: number; data: ElectionMapResults };
+type SelectedMunicipalityResults = {
+  municipality: string | null;
+  candidates: Candidate[];
+  sourceUrl: string;
+  updatedAt: string | null;
+};
 type HoveredFeature = { feature: MapFeature; left: number; top: number };
 type MapPointer = { x: number; y: number };
 type PinchGesture = {
@@ -147,6 +154,9 @@ export function ElectionMap({
   onSelectMunicipality,
   selectedState,
   selectedMunicipality,
+  selectedMunicipalityResults,
+  selectedMunicipalityLoading,
+  selectedMunicipalityError,
   turn,
   preview = false,
 }: {
@@ -154,6 +164,9 @@ export function ElectionMap({
   onSelectMunicipality: (feature: MapFeature | null) => void;
   selectedState: MapFeature | null;
   selectedMunicipality: MapFeature | null;
+  selectedMunicipalityResults: SelectedMunicipalityResults | null;
+  selectedMunicipalityLoading: boolean;
+  selectedMunicipalityError: string | null;
   turn: number;
   preview?: boolean;
 }) {
@@ -162,8 +175,6 @@ export function ElectionMap({
   const [error, setError] = useState<string | null>(null);
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
   const [nationalResults, setNationalResults] = useState<CachedMapResults | null>(null);
-  const [nationalMunicipalResults, setNationalMunicipalResults] = useState<CachedMapResults | null>(null);
-  const [focusedResults, setFocusedResults] = useState<CachedMapResults | null>(null);
   const [loadingElectionResults, setLoadingElectionResults] = useState(false);
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [hoveredFeature, setHoveredFeature] = useState<HoveredFeature | null>(null);
@@ -266,6 +277,12 @@ export function ElectionMap({
   useEffect(() => {
     let active = true;
     setResultsError(null);
+    if (selectedState) {
+      setLoadingElectionResults(false);
+      return () => {
+        active = false;
+      };
+    }
     setLoadingElectionResults(true);
 
     const fetchResults = async (scope: string, uf: string) => {
@@ -282,25 +299,9 @@ export function ElectionMap({
 
     const refreshElectionResults = async () => {
       try {
-        if (selectedState) {
-          const data = await fetchResults("municipalities", selectedState.properties.id ?? "");
-          if (active) {
-            setFocusedResults({ turn, stateId: selectedState.properties.id ?? null, data });
-          }
-        } else {
-          try {
-            const stateData = await fetchResults("states", "br");
-            if (active) setNationalResults({ turn, stateId: null, data: stateData });
-          } catch {
-            if (active) setResultsError("Não foi possível carregar os resultados por estado.");
-          }
-
-          const data = await fetchResults("municipalities", "br");
-          if (active) setNationalMunicipalResults({ turn, stateId: null, data });
-        }
-        if (active) {
-          setResultsError(null);
-        }
+        const data = await fetchResults("states", "br");
+        if (active) setNationalResults({ turn, data });
+        if (active) setResultsError(null);
       } catch (reason) {
         if (active) {
           setResultsError(
@@ -315,7 +316,7 @@ export function ElectionMap({
     };
 
     void refreshElectionResults();
-    const timer = window.setInterval(() => void refreshElectionResults(), selectedState ? 30_000 : 60_000);
+    const timer = window.setInterval(() => void refreshElectionResults(), 60_000);
     return () => {
       active = false;
       window.clearInterval(timer);
@@ -323,16 +324,45 @@ export function ElectionMap({
   }, [selectedState, turn]);
 
   const nationalElectionResults = nationalResults?.turn === turn ? nationalResults.data : null;
-  const nationalMunicipalElectionResults = nationalMunicipalResults?.turn === turn
-    ? nationalMunicipalResults.data
-    : null;
-  const focusedElectionResults = selectedState && focusedResults?.turn === turn &&
-    focusedResults.stateId === selectedState.properties.id
-    ? focusedResults.data
-    : null;
-  const electionResults = selectedState
-    ? focusedElectionResults ?? nationalMunicipalElectionResults ?? nationalElectionResults
-    : nationalElectionResults ?? nationalMunicipalElectionResults;
+  const selectedMunicipalityMapResults = useMemo<ElectionMapResults | null>(() => {
+    const municipalityId = selectedMunicipality?.properties.id;
+    if (
+      !selectedState ||
+      !municipalityId ||
+      selectedMunicipalityResults?.municipality !== municipalityId
+    ) {
+      return null;
+    }
+
+    const candidates = selectedMunicipalityResults.candidates.map(
+      ({ id, name, party, votes, percentage }) => ({ id, name, party, votes, percentage }),
+    );
+    const first = candidates[0];
+    const tiedLeaders = first ? candidates.filter(({ votes }) => votes === first.votes) : [];
+    const hasVotes = Boolean(first && first.votes > 0);
+
+    return {
+      candidates,
+      results: {
+        [municipalityId]: {
+          published: true,
+          candidateId: hasVotes && tiedLeaders.length === 1 ? first!.id : null,
+          tieCandidateIds: hasVotes && tiedLeaders.length > 1
+            ? tiedLeaders.map(({ id }) => id)
+            : [],
+          votes: hasVotes ? first!.votes : null,
+          percentage: hasVotes ? first!.percentage : null,
+          leaders: hasVotes
+            ? candidates.slice(0, 2).map(({ id, votes, percentage }) => ({ candidateId: id, votes, percentage }))
+            : [],
+        },
+      },
+      unpublished: 0,
+      updatedAt: selectedMunicipalityResults.updatedAt,
+      sourceUrl: selectedMunicipalityResults.sourceUrl,
+    };
+  }, [selectedMunicipality, selectedMunicipalityResults, selectedState]);
+  const electionResults = selectedState ? selectedMunicipalityMapResults : nationalElectionResults;
   const selectMunicipality = (feature: MapFeature) => {
     const stateFeature = stateFeatures.find(
       (state) => state.properties.sigla?.toUpperCase() === feature.properties.sigla?.toUpperCase(),
@@ -599,20 +629,49 @@ export function ElectionMap({
         </div>
       ) : !bounds ? (
         <div
+          role="status"
           aria-label="Carregando malha geográfica do IBGE"
-          className="flex min-h-72 items-center justify-center rounded-2xl bg-background-secondary-default text-body-regular text-text-secondary"
+          className="min-h-72 rounded-2xl bg-background-secondary-default p-5"
         >
-          Carregando mapa oficial…
+          <span className="sr-only">Carregando mapa oficial do IBGE…</span>
+          <div className="flex items-center justify-between">
+            <ElectionSkeleton className="h-4 w-28" />
+            <ElectionSkeleton className="h-8 w-32 rounded-lg" />
+          </div>
+          <div className="mx-auto mt-8 grid max-w-xl grid-cols-4 gap-3 sm:grid-cols-5">
+            {Array.from({ length: 18 }, (_, index) => (
+              <ElectionSkeleton
+                key={index}
+                className={`h-12 ${index % 5 === 0 ? "col-span-2" : ""} ${index % 3 === 0 ? "rounded-2xl" : "rounded-lg"}`}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div
           ref={mapContainerRef}
           className="relative overflow-hidden overscroll-contain rounded-2xl bg-background-secondary-default p-2 sm:p-4"
         >
+          {selectedMunicipality && selectedMunicipalityLoading && !selectedMunicipalityResults && (
+            <div role="status" aria-label="Consultando resultado do município" className="mb-3 flex items-center gap-3 rounded-xl bg-background-tertiary-default p-3">
+              <span className="sr-only">Consultando resultado oficial do município no TSE…</span>
+              <ElectionSkeleton className="size-4 rounded-full" />
+              <ElectionSkeleton className="h-3 w-48" />
+            </div>
+          )}
           {loadingMunicipalities && (
-            <p role="status" className="mb-3 rounded-xl bg-background-tertiary-default p-3 text-body-2-regular text-text-secondary">
-              Carregando divisões municipais do Brasil…
-            </p>
+            <div role="status" aria-label="Carregando divisões municipais" className="mb-3 flex items-center gap-3 rounded-xl bg-background-tertiary-default p-3">
+              <span className="sr-only">Carregando divisões municipais do Brasil…</span>
+              <ElectionSkeleton className="size-4 rounded-full" />
+              <ElectionSkeleton className="h-3 w-48" />
+            </div>
+          )}
+          {loadingElectionResults && !electionResults && !resultsError && (
+            <div role="status" aria-label="Consultando resultados oficiais" className="mb-3 flex items-center gap-3 rounded-xl bg-background-tertiary-default p-3">
+              <span className="sr-only">Consultando resultados oficiais do TSE…</span>
+              <ElectionSkeleton className="size-4 rounded-full" />
+              <ElectionSkeleton className="h-3 w-44" />
+            </div>
           )}
           {resultsError && (
             <p
@@ -802,6 +861,28 @@ export function ElectionMap({
                 </div>
               </div>
               {(() => {
+                const featureId = tooltipFeature.feature.properties.id;
+                if (selectedState && featureId !== selectedMunicipality?.properties.id) {
+                  return (
+                    <p className="mt-2 text-caption-1-regular text-text-secondary">
+                      Clique neste município para consultar os dados oficiais.
+                    </p>
+                  );
+                }
+                if (selectedState && selectedMunicipalityError) {
+                  return (
+                    <p className="mt-2 text-caption-1-regular text-text-secondary">
+                      {selectedMunicipalityError}
+                    </p>
+                  );
+                }
+                if (selectedState && selectedMunicipalityLoading) {
+                  return (
+                    <p className="mt-2 text-caption-1-regular text-text-secondary">
+                      Consultando resultado oficial…
+                    </p>
+                  );
+                }
                 const result = tooltipFeature.feature.properties.id
                   ? electionResults?.results[tooltipFeature.feature.properties.id]
                   : undefined;

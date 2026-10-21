@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   RiExternalLinkLine,
+  RiGithubFill,
   RiMoonLine,
   RiRefreshLine,
   RiSunLine,
@@ -269,7 +270,7 @@ export function ElectionDashboard() {
   const [liveError, setLiveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTurn, setSelectedTurn] = useState(1);
+  const [selectedTurn, setSelectedTurn] = useState(2);
 
   const refresh = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -339,6 +340,16 @@ export function ElectionDashboard() {
                   Atualizar
                 </Button>
                 <ThemeToggle />
+                <a
+                  href="https://github.com/eudegabrielf"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Perfil de Eude Gabriel no GitHub"
+                  title="Perfil de Eude Gabriel no GitHub"
+                  className="flex size-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+                >
+                  <RiGithubFill className="size-5" aria-hidden />
+                </a>
               </div>
             </header>
 

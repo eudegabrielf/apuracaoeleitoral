@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RiAddLine, RiArrowLeftLine, RiMapPin2Line, RiRestartLine, RiSearchLine, RiSubtractLine } from "@remixicon/react";
+import { RiAddLine, RiArrowLeftLine, RiLoader4Line, RiMapPin2Line, RiRestartLine, RiSearchLine, RiSubtractLine } from "@remixicon/react";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
@@ -562,9 +562,29 @@ export function ElectionMap({
   };
 
   const tooltipFeature = hoveredFeature ?? pinnedFeature;
+  const mobileLoadingMessage = error
+    ? null
+    : !bounds
+      ? "Carregando mapa oficial do IBGE…"
+      : loadingMunicipalities
+        ? "Carregando municípios…"
+        : selectedMunicipality && selectedMunicipalityLoading
+          ? "Consultando município no TSE…"
+          : loadingElectionResults && !electionResults
+            ? "Consultando resultados do mapa…"
+            : null;
 
   return (
     <section className="min-w-0 rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6">
+      {mobileLoadingMessage && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-x-3 bottom-3 z-[60] flex items-center gap-2 rounded-xl border border-border-button-default bg-background-primary-default p-3 text-body-2-medium text-text-secondary shadow-card sm:hidden"
+        >
+          <RiLoader4Line className="size-4 shrink-0 animate-spin text-accent-500" />
+          <span>{mobileLoadingMessage}</span>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
@@ -651,7 +671,10 @@ export function ElectionMap({
           aria-label="Carregando malha geográfica do IBGE"
           className="min-h-72 rounded-2xl bg-background-secondary-default p-5"
         >
-          <span className="sr-only">Carregando mapa oficial do IBGE…</span>
+          <div className="mb-4 flex items-center gap-2 text-body-2-medium text-text-secondary">
+            <RiLoader4Line className="size-4 animate-spin" aria-hidden />
+            <span>Carregando mapa oficial do IBGE…</span>
+          </div>
           <div className="flex items-center justify-between">
             <ElectionSkeleton className="h-4 w-28" />
             <ElectionSkeleton className="h-8 w-32 rounded-lg" />

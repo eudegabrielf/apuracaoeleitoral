@@ -32,6 +32,7 @@ export type ElectionResults = {
   uf: string;
   sourceUrl: string;
   updatedAt: string | null;
+  completed: boolean;
   sections: { total: number | null; counted: number | null; percentage: number | null };
   statistics: {
     eligibleVoters: number | null;

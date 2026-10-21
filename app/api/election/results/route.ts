@@ -31,6 +31,8 @@ type TSEPayload = {
   hg?: string;
   dt?: string;
   ht?: string;
+  tf?: string;
+  and?: string;
   s?: Record<string, string>;
   e?: Record<string, string>;
   v?: Record<string, string>;
@@ -206,6 +208,7 @@ export async function GET(request: Request) {
         : payload.dg && payload.hg
           ? `${payload.dg} ${payload.hg}`
           : null,
+      completed: payload.tf === "s" || payload.and === "f",
       sections: {
         total: parseCount(sections.ts),
         counted: parseCount(sections.st),

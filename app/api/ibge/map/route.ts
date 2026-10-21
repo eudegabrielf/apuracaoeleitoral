@@ -41,6 +41,8 @@ export async function GET(request: Request) {
   let mapUrl: string;
   if (scope === "states" && uf === "br") {
     mapUrl = `${IBGE_BASE}/paises/BR?formato=application/vnd.geo+json&qualidade=intermediaria&intrarregiao=UF`;
+  } else if (scope === "municipalities" && uf === "br") {
+    mapUrl = `${IBGE_BASE}/paises/BR?formato=application/vnd.geo+json&qualidade=minima&intrarregiao=municipio`;
   } else if (scope === "municipalities" && /^\d{2}$/.test(uf)) {
     mapUrl = `${IBGE_BASE}/estados/${uf}?formato=application/vnd.geo+json&qualidade=intermediaria&intrarregiao=municipio`;
   } else {
@@ -58,8 +60,9 @@ export async function GET(request: Request) {
     );
     const features = map.features.map((feature) => {
       const ibgeCode = feature.properties.codarea;
-      const stateUf =
-        scope === "states" ? IBGE_STATE_UFS[ibgeCode] : IBGE_STATE_UFS[uf];
+      const stateUf = scope === "states"
+        ? IBGE_STATE_UFS[ibgeCode]
+        : IBGE_STATE_UFS[uf === "br" ? ibgeCode.slice(0, 2) : uf];
       const state = stateUf ? tseStateByUf.get(stateUf) : undefined;
 
       if (!state) {

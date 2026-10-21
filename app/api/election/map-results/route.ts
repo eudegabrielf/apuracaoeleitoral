@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 const ELECTION_CODES = { "1": "6257", "2": "6258" } as const;
 const MUNICIPALITIES_URL =
   "https://resultados.tse.jus.br/oficial/ele2026/6257/config/mun-e006257-cm.json";
-const MAP_CACHE_TTL = 30_000;
-const REQUEST_CONCURRENCY = 32;
+const MAP_CACHE_TTL = 60_000;
+const REQUEST_CONCURRENCY = 16;
 
 const IBGE_STATE_UFS: Record<string, string> = {
   "11": "ro", "12": "ac", "13": "am", "14": "rr", "15": "pa", "16": "ap", "17": "to",
@@ -49,6 +49,7 @@ type TSEMunicipality = { cd: string; cdi: string; nm: string };
 type TSECoverage = { cd: string; mu?: TSEMunicipality[] };
 type TSEConfiguration = { abr?: TSECoverage[] };
 type MapWinner = {
+  published: boolean;
   candidateId: string | null;
   tieCandidateIds: string[];
   votes: number | null;
@@ -67,6 +68,7 @@ type MapResults = {
 
 type CachedResults = { expiresAt: number; data: MapResults };
 const resultCache = new Map<string, CachedResults>();
+const inFlightResults = new Map<string, Promise<MapResults>>();
 let configurationPromise: Promise<TSEConfiguration> | null = null;
 
 function parseCount(value?: string): number | null {
@@ -138,11 +140,19 @@ function buildWinner(payload: TSEPayload | null): MapWinner {
   const candidates = payload ? getCandidates(payload) : [];
   const top = candidates[0];
   if (!top || top.votes === 0) {
-    return { candidateId: null, tieCandidateIds: [], votes: null, percentage: null, leaders: [] };
+    return {
+      published: payload !== null,
+      candidateId: null,
+      tieCandidateIds: [],
+      votes: null,
+      percentage: null,
+      leaders: [],
+    };
   }
 
   const ties = candidates.filter((candidate) => candidate.votes === top.votes);
   return {
+    published: true,
     candidateId: ties.length === 1 ? top.id : null,
     tieCandidateIds: ties.length > 1 ? ties.map(({ id }) => id) : [],
     votes: top.votes,
@@ -155,11 +165,7 @@ function buildWinner(payload: TSEPayload | null): MapWinner {
   };
 }
 
-async function buildMapResults(turn: string, uf: string): Promise<MapResults> {
-  const cacheKey = `${turn}:${uf}`;
-  const cached = resultCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.data;
-
+async function buildMapResults(turn: string, uf: string, scope: string): Promise<MapResults> {
   const [configuration, nationalPayload] = await Promise.all([
     getConfiguration(),
     fetchPayload(getTSEUrl(turn, "br")),
@@ -181,6 +187,14 @@ async function buildMapResults(turn: string, uf: string): Promise<MapResults> {
         .find(([, stateUf]) => stateUf === state.cd.toLowerCase())?.[0];
       if (!ibgeCode) continue;
       locations.push({ ibgeCode, resultUrl: getTSEUrl(turn, state.cd.toLowerCase()) });
+      if (scope === "municipalities") {
+        for (const municipality of state.mu ?? []) {
+          locations.push({
+            ibgeCode: municipality.cdi,
+            resultUrl: getTSEUrl(turn, state.cd.toLowerCase(), municipality.cd),
+          });
+        }
+      }
     }
   } else {
     const state = (configuration.abr ?? []).find((entry) => entry.cd.toLowerCase() === uf);
@@ -200,9 +214,14 @@ async function buildMapResults(turn: string, uf: string): Promise<MapResults> {
     while (nextLocation < locations.length) {
       const location = locations[nextLocation++];
       if (!location) continue;
-      const payload = await fetchPayload(location.resultUrl);
-      results[location.ibgeCode] = buildWinner(payload);
-      if (!payload) unpublished++;
+      try {
+        const payload = await fetchPayload(location.resultUrl);
+        results[location.ibgeCode] = buildWinner(payload);
+        if (!payload) unpublished++;
+      } catch {
+        results[location.ibgeCode] = buildWinner(null);
+        unpublished++;
+      }
     }
   }
 
@@ -224,8 +243,27 @@ async function buildMapResults(turn: string, uf: string): Promise<MapResults> {
     results,
     unpublished,
   };
-  resultCache.set(cacheKey, { expiresAt: Date.now() + MAP_CACHE_TTL, data });
   return data;
+}
+
+async function getMapResults(turn: string, uf: string, scope: string): Promise<MapResults> {
+  const cacheKey = `${turn}:${scope}:${uf}`;
+  const cached = resultCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  let pending = inFlightResults.get(cacheKey);
+  if (!pending) {
+    pending = buildMapResults(turn, uf, scope);
+    inFlightResults.set(cacheKey, pending);
+  }
+
+  try {
+    const data = await pending;
+    resultCache.set(cacheKey, { expiresAt: Date.now() + MAP_CACHE_TTL, data });
+    return data;
+  } finally {
+    if (inFlightResults.get(cacheKey) === pending) inFlightResults.delete(cacheKey);
+  }
 }
 
 export const dynamic = "force-dynamic";
@@ -246,12 +284,8 @@ export async function GET(request: Request) {
   if (scope === "states" && uf !== "br") {
     return NextResponse.json({ error: "A malha de estados exige o recorte Brasil." }, { status: 400 });
   }
-  if (scope === "municipalities" && uf === "br") {
-    return NextResponse.json({ error: "Selecione a UF antes de carregar municípios." }, { status: 400 });
-  }
-
   try {
-    const results = await buildMapResults(turn, uf);
+    const results = await getMapResults(turn, uf, scope);
     return NextResponse.json(results, {
       headers: { "Cache-Control": "no-store" },
     });

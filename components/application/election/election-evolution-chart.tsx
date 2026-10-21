@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useId, useState } from "react";
-import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useEffect, useState } from "react";
+import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
 import type { ElectionResults } from "@/components/application/election/election-dashboard";
 
@@ -10,8 +9,91 @@ type Snapshot = {
   observedAt: number;
   sourceUpdatedAt: string;
   sectionsCounted: number | null;
+  completed?: boolean;
   candidates: { id: string; votes: number; percentage: number }[];
 };
+
+const firstRoundCandidates: ElectionResults["candidates"] = [
+  { id: "280002551544", number: "22", name: "FLAVIO BOLSONARO", party: "PL", votes: 56_104_503, percentage: 47.027772356 },
+  { id: "280002542548", number: "13", name: "LULA", party: "PT", votes: 53_879_538, percentage: 45.162767911 },
+  { id: "280002551547", number: "70", name: "ESCRITOR AUGUSTO CURY", party: "AVANTE", votes: 3_448_569, percentage: 2.890650647 },
+  { id: "280002540694", number: "14", name: "RENAN SANTOS", party: "MISSÃO", votes: 2_675_887, percentage: 2.242975126 },
+  { id: "280002551932", number: "55", name: "RONALDO CAIADO", party: "PSD", votes: 2_605_148, percentage: 2.183680463 },
+];
+
+const firstRoundHistory: Snapshot[] = [
+  {
+    observedAt: new Date("2026-10-04T17:25:57-03:00").getTime(),
+    sourceUpdatedAt: "04/10/2026 17:25:57",
+    sectionsCounted: 8_489,
+    candidates: [
+      { id: "280002551544", votes: 970_881, percentage: 49.185776830 },
+      { id: "280002542548", votes: 832_776, percentage: 42.189243054 },
+      { id: "280002551547", votes: 60_783, percentage: 3.079325966 },
+      { id: "280002540694", votes: 48_694, percentage: 2.466885455 },
+      { id: "280002551932", votes: 46_010, percentage: 2.330911401 },
+    ],
+  },
+  {
+    observedAt: new Date("2026-10-04T22:27:56-03:00").getTime(),
+    sourceUpdatedAt: "04/10/2026 22:27:56",
+    sectionsCounted: 498_745,
+    candidates: [
+      { id: "280002551544", votes: 56_079_781, percentage: 47.052823008 },
+      { id: "280002542548", votes: 53_792_426, percentage: 45.133655207 },
+      { id: "280002551547", votes: 3_446_597, percentage: 2.891810840 },
+      { id: "280002540694", votes: 2_674_931, percentage: 2.244357104 },
+      { id: "280002551932", votes: 2_604_065, percentage: 2.184898146 },
+    ],
+  },
+  {
+    observedAt: new Date("2026-10-05T01:56:22-03:00").getTime(),
+    sourceUpdatedAt: "05/10/2026 01:56:22",
+    sectionsCounted: 499_247,
+    candidates: [
+      { id: "280002551544", votes: 56_104_500, percentage: 47.027910964 },
+      { id: "280002542548", votes: 53_879_187, percentage: 45.162609221 },
+      { id: "280002551547", votes: 3_448_569, percentage: 2.890659321 },
+      { id: "280002540694", votes: 2_675_886, percentage: 2.242975126 },
+      { id: "280002551932", votes: 2_605_145, percentage: 2.183684501 },
+    ],
+  },
+  {
+    observedAt: new Date("2026-10-05T02:58:39-03:00").getTime(),
+    sourceUpdatedAt: "05/10/2026 02:58:39",
+    sectionsCounted: 499_248,
+    candidates: [
+      { id: "280002551544", votes: 56_104_503, percentage: 47.027772356 },
+      { id: "280002542548", votes: 53_879_538, percentage: 45.162767911 },
+      { id: "280002551547", votes: 3_448_569, percentage: 2.890650647 },
+      { id: "280002540694", votes: 2_675_887, percentage: 2.242975126 },
+      { id: "280002551932", votes: 2_605_148, percentage: 2.183680463 },
+    ],
+  },
+  {
+    observedAt: new Date("2026-10-05T12:51:05-03:00").getTime(),
+    sourceUpdatedAt: "05/10/2026 12:51:05",
+    sectionsCounted: 499_248,
+    completed: true,
+    candidates: [
+      { id: "280002551544", votes: 56_104_503, percentage: 47.027772356 },
+      { id: "280002542548", votes: 53_879_538, percentage: 45.162767911 },
+      { id: "280002551547", votes: 3_448_569, percentage: 2.890650647 },
+      { id: "280002540694", votes: 2_675_887, percentage: 2.242975126 },
+      { id: "280002551932", votes: 2_605_148, percentage: 2.183680463 },
+    ],
+  },
+];
+
+const firstRoundArchiveUrl =
+  "https://web.archive.org/web/20261006093612id_/https://resultados.tse.jus.br/oficial/ele2026/6257/dados/br/br-c0001-e006257-u.json";
+
+function parseSourceTimestamp(value: string): number | null {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}:\d{2}:\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, day, month, year, time] = match;
+  return new Date(`${year}-${month}-${day}T${time}-03:00`).getTime();
+}
 
 function isSnapshot(value: unknown): value is Snapshot {
   if (typeof value !== "object" || value === null) return false;
@@ -20,6 +102,7 @@ function isSnapshot(value: unknown): value is Snapshot {
     typeof record.observedAt !== "number" ||
     typeof record.sourceUpdatedAt !== "string" ||
     (record.sectionsCounted !== null && typeof record.sectionsCounted !== "number") ||
+    (record.completed !== undefined && typeof record.completed !== "boolean") ||
     !Array.isArray(record.candidates)
   ) {
     return false;
@@ -38,11 +121,52 @@ function readSnapshots(turn: number): Snapshot[] {
   if (!Array.isArray(parsed) || !parsed.every(isSnapshot)) {
     throw new Error("O histórico local da apuração tem um formato inválido.");
   }
-  return parsed.filter(isSnapshot);
+  return parsed
+    .filter(isSnapshot)
+    .flatMap((snapshot) => {
+      const observedAt = parseSourceTimestamp(snapshot.sourceUpdatedAt);
+      return observedAt == null || snapshot.sectionsCounted === 0
+        ? []
+        : [{ ...snapshot, observedAt, completed: snapshot.completed ?? false }];
+    })
+    .sort((left, right) => left.observedAt - right.observedAt);
 }
 
 const formatTime = (value: number) =>
-  new Date(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  new Date(value).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+function getHourlyTicks(snapshots: Snapshot[]) {
+  const first = snapshots[0]?.observedAt;
+  const last = snapshots[snapshots.length - 1]?.observedAt;
+  if (first == null || last == null) return [];
+
+  const hour = 60 * 60 * 1000;
+  const ticks = [first];
+  for (let tick = Math.ceil(first / hour) * hour; tick < last; tick += hour) {
+    ticks.push(tick);
+  }
+  if (last !== first) ticks.push(last);
+  return ticks;
+}
+
+function formatHourTick(value: number, first: number, last: number) {
+  if (value === first || value === last) return formatTime(value);
+  const hour = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+  }).format(value);
+  return `${hour}h`;
+}
+
+function formatPercent(value: number | undefined) {
+  return value == null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+}
 
 export function ElectionEvolutionChart({
   turn,
@@ -51,12 +175,17 @@ export function ElectionEvolutionChart({
   turn: number;
   results: ElectionResults | null;
 }) {
-  const gradientId = useId().replace(/:/g, "");
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loadedTurn, setLoadedTurn] = useState<number | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (turn === 1) {
+      setSnapshots([]);
+      setHistoryError(null);
+      setLoadedTurn(turn);
+      return;
+    }
     try {
       setSnapshots(readSnapshots(turn));
       setHistoryError(null);
@@ -68,16 +197,31 @@ export function ElectionEvolutionChart({
   }, [turn]);
 
   useEffect(() => {
-    if (loadedTurn !== turn || historyError || !results?.updatedAt || results.sections.counted === 0) return;
+    if (
+      turn === 1 ||
+      loadedTurn !== turn ||
+      historyError ||
+      !results?.updatedAt ||
+      results.sections.counted == null ||
+      results.sections.counted === 0 ||
+      snapshots.some((snapshot) => snapshot.completed)
+    ) return;
+    const observedAt = parseSourceTimestamp(results.updatedAt);
+    if (observedAt == null) return;
 
     const snapshot: Snapshot = {
-      observedAt: Date.now(),
+      observedAt,
       sourceUpdatedAt: results.updatedAt,
       sectionsCounted: results.sections.counted,
-      candidates: results.candidates.map(({ id, votes, percentage }) => ({ id, votes, percentage })),
+      completed: results.completed,
+      candidates: results.candidates
+        .filter((candidate) => candidate.name.trim())
+        .map(({ id, votes, percentage }) => ({ id, votes, percentage })),
     };
+    if (snapshot.candidates.length === 0) return;
 
     setSnapshots((current) => {
+      if (current.some((entry) => entry.completed)) return current;
       const previous = current[current.length - 1];
       const previousSignature = previous
         ? JSON.stringify([previous.sourceUpdatedAt, previous.sectionsCounted, previous.candidates])
@@ -86,10 +230,10 @@ export function ElectionEvolutionChart({
       if (previousSignature === nextSignature) return current;
       return [...current, snapshot].slice(-1200);
     });
-  }, [historyError, loadedTurn, results, turn]);
+  }, [historyError, loadedTurn, results, snapshots, turn]);
 
   useEffect(() => {
-    if (loadedTurn !== turn || snapshots.length === 0) return;
+    if (turn === 1 || loadedTurn !== turn || snapshots.length === 0) return;
     try {
       window.localStorage.setItem(`boardui:election-history:${turn}`, JSON.stringify(snapshots));
       setHistoryError(null);
@@ -98,9 +242,20 @@ export function ElectionEvolutionChart({
     }
   }, [loadedTurn, snapshots, turn]);
 
-  const chartCandidates = results?.candidates.slice(0, turn === 1 ? 5 : 2) ?? [];
-  const data = snapshots.map((snapshot) => ({
-    ...Object.fromEntries(snapshot.candidates.map((candidate) => [candidate.id, candidate.percentage])),
+  const chartCandidates = turn === 1
+    ? firstRoundCandidates
+    : results?.candidates.filter((candidate) => candidate.name.trim()).slice(0, 2) ?? [];
+  const chartSnapshots = turn === 1 ? firstRoundHistory : snapshots;
+  const visibleCandidateIds = new Set(chartCandidates.map((candidate) => candidate.id));
+  const hourlyTicks = getHourlyTicks(chartSnapshots);
+  const firstTimestamp = chartSnapshots[0]?.observedAt ?? 0;
+  const lastTimestamp = chartSnapshots[chartSnapshots.length - 1]?.observedAt ?? 0;
+  const data = chartSnapshots.map((snapshot) => ({
+    ...Object.fromEntries(
+      snapshot.candidates
+        .filter((candidate) => visibleCandidateIds.has(candidate.id))
+        .map((candidate) => [candidate.id, candidate.percentage]),
+    ),
     observedAt: snapshot.observedAt,
     sourceUpdatedAt: snapshot.sourceUpdatedAt,
   }));
@@ -122,7 +277,7 @@ export function ElectionEvolutionChart({
         </span>
       </div>
 
-      {historyError ? (
+      {turn === 2 && historyError ? (
         <p role="alert" className="mt-5 rounded-xl bg-background-secondary-default p-4 text-body-2-regular text-text-primary">
           {historyError}
         </p>
@@ -130,37 +285,29 @@ export function ElectionEvolutionChart({
         <p role="status" className="mt-5 rounded-xl bg-background-secondary-default p-4 text-body-2-regular text-text-secondary">
           A evolução aparecerá quando a primeira votação oficial do segundo turno for publicada.
         </p>
-      ) : snapshots.length === 0 ? (
+      ) : chartSnapshots.length === 0 ? (
         <p className="mt-5 rounded-xl bg-background-secondary-default p-4 text-body-2-regular text-text-secondary">
-          Ainda não há publicações para traçar uma evolução. O histórico neste dispositivo começa quando um resultado oficial for atualizado.
+          Ainda não há publicações do segundo turno neste dispositivo para traçar uma evolução.
         </p>
       ) : (
         <>
-          <div className="mt-5 h-80 w-full min-w-0 rounded-2xl bg-background-secondary-default p-4">
+          <div className="mt-5 w-full overflow-x-auto overscroll-x-contain rounded-2xl bg-background-secondary-default">
+            <div className="h-80 min-w-[1480px] p-4">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
-                <defs>
-                  {chartCandidates.map((candidate) => {
-                    const color = getCandidateColor(candidate);
-                    return (
-                      <linearGradient key={candidate.id} id={`${gradientId}-${candidate.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={color.variable} stopOpacity={0.3} />
-                        <stop offset="100%" stopColor={color.variable} stopOpacity={0} />
-                      </linearGradient>
-                    );
-                  })}
-                </defs>
                 <CartesianGrid vertical={false} stroke="var(--color-separator-border)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="observedAt"
                   type="number"
                   scale="time"
                   domain={["dataMin", "dataMax"]}
-                  tickFormatter={formatTime}
+                  ticks={hourlyTicks}
+                  interval={0}
+                  tickFormatter={(value) => formatHourTick(Number(value), firstTimestamp, lastTimestamp)}
                   tickLine={false}
                   axisLine={false}
                   tickMargin={12}
-                  tick={{ fontSize: 12, fill: "var(--color-text-tertiary)" }}
+                  tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
                 />
                 <YAxis
                   domain={[0, 100]}
@@ -184,28 +331,19 @@ export function ElectionEvolutionChart({
                 {chartCandidates.map((candidate) => {
                   const color = getCandidateColor(candidate);
                   return (
-                    <Area
-                      key={`area-${candidate.id}`}
-                      type="monotone"
-                      dataKey={candidate.id}
-                      stroke="none"
-                      fill={`url(#${gradientId}-${candidate.id})`}
-                      connectNulls
-                      isAnimationActive={false}
-                    />
-                  );
-                })}
-                {chartCandidates.map((candidate) => {
-                  const color = getCandidateColor(candidate);
-                  return (
                     <Line
                       key={candidate.id}
                       dataKey={candidate.id}
                       name={candidate.name}
                       stroke={color.variable}
-                      type="monotone"
+                      type="linear"
                       strokeWidth={2.5}
-                      dot={false}
+                      dot={{
+                        r: 3,
+                        fill: color.variable,
+                        stroke: "var(--color-background-secondary-default)",
+                        strokeWidth: 1.5,
+                      }}
                       activeDot={{ r: 5, fill: color.variable, stroke: "var(--color-background-secondary-default)", strokeWidth: 2 }}
                       connectNulls
                     />
@@ -213,28 +351,35 @@ export function ElectionEvolutionChart({
                 })}
               </ComposedChart>
             </ResponsiveContainer>
+            </div>
           </div>
 
-          <ul aria-label="Candidatos exibidos no gráfico" className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+          <p className="mb-1 mt-4 text-caption-1-semibold text-text-tertiary">Percentual final</p>
+          <ul aria-label="Percentual final por candidato" className="grid grid-cols-1 gap-x-5 sm:grid-cols-2 xl:grid-cols-3">
             {chartCandidates.map((candidate) => {
               const color = getCandidateColor(candidate);
+              const finalPercentage = chartSnapshots[chartSnapshots.length - 1]?.candidates
+                .find((entry) => entry.id === candidate.id)?.percentage;
               return (
-                <li key={candidate.id} className="flex items-center gap-2">
-                  <span aria-hidden className={`size-2.5 rounded-full ${color.activeBackground}`} />
-                  <Image
-                    src={`/election/candidates/${candidate.id}.jpg`}
-                    alt={`Foto oficial de campanha de ${candidate.name}`}
-                    width={24}
-                    height={24}
-                    className="size-6 rounded-full border border-border-button-default object-cover"
-                  />
-                  <span className="text-caption-1-regular text-text-secondary">{candidate.name}</span>
+                <li key={candidate.id} aria-label={`${candidate.name}: ${formatPercent(finalPercentage)}`} title={candidate.name} className="flex min-w-0 items-center gap-2 border-b border-separator-border py-2">
+                  <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${color.activeBackground}`} />
+                  <span className="min-w-0 flex-1 truncate text-caption-1-regular text-text-secondary">{candidate.name}</span>
+                  <span className="shrink-0 text-caption-1-medium tabular-nums text-text-primary">{formatPercent(finalPercentage)}</span>
                 </li>
               );
             })}
           </ul>
           <p className="mt-3 text-caption-1-regular text-text-tertiary">
-            As amostras são registradas a partir do momento em que este dispositivo observa novas publicações oficiais; não há pontos anteriores estimados.
+            {turn === 1 ? (
+              <>
+                Série oficial do TSE, do início da apuração em 04/10 às 17:25 até a conclusão em 05/10 às 12:51. Eixo horário a cada hora; os pontos são as capturas oficiais disponíveis. Dados via{" "}
+                <a href={firstRoundArchiveUrl} target="_blank" rel="noreferrer" className="underline hover:text-text-primary">
+                  captura arquivada
+                </a>.
+              </>
+            ) : (
+              "Horários baseados nas publicações oficiais do TSE. A série começa na primeira seção totalizada e termina quando o TSE conclui a apuração."
+            )}
           </p>
         </>
       )}

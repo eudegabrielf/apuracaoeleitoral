@@ -97,7 +97,7 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
             <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">Resultados por localidade</p>
             <h2 className="mt-1 text-title-3-semibold text-text-primary">{locality}</h2>
             <p className="mt-1 text-body-2-regular text-text-secondary">
-              Selecione um estado e, em seguida, um município para consultar a apuração local.
+              Selecione um município no mapa para consultar a apuração local.
             </p>
           </div>
           {turn === 2 && results?.sections.counted === 0 && (
@@ -105,7 +105,7 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
           )}
       </header>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
         <ElectionMap
           selectedState={state}
           selectedMunicipality={municipality}
@@ -117,7 +117,7 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
           onSelectMunicipality={setMunicipality}
         />
 
-        <section className="rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6">
+        <section className="min-w-0 rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">Resultado oficial · {turn}º turno</p>

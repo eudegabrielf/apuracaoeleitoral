@@ -111,12 +111,12 @@ function ThemeToggle() {
     <Button
       variant="secondary"
       size="small"
+      iconOnly
       leadingIcon={dark ? RiSunLine : RiMoonLine}
       aria-label={dark ? "Ativar tema claro" : "Ativar tema escuro"}
+      title={dark ? "Ativar tema claro" : "Ativar tema escuro"}
       onClick={toggle}
-    >
-      {dark ? "Tema claro" : "Tema escuro"}
-    </Button>
+    />
   );
 }
 
@@ -318,8 +318,8 @@ export function ElectionDashboard() {
       <div className="mx-auto w-full max-w-[1600px]">
         <main className="min-w-0 rounded-3xl bg-background-full lg:px-2 lg:py-2">
           <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 pb-8">
-            <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-button-default bg-background-primary-default px-5 py-3 shadow-card">
-              <div>
+            <header className="relative flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-button-default bg-background-primary-default px-5 py-3 shadow-card">
+              <div className="flex items-center gap-3">
                 <div>
                   <p className="text-body-medium text-text-primary">Apuração</p>
                   <p className="text-caption-1-regular text-text-tertiary">Eleição presidencial · 2026</p>
@@ -339,6 +339,8 @@ export function ElectionDashboard() {
                 >
                   Atualizar
                 </Button>
+              </div>
+              <div className="absolute end-5 top-3 flex items-center gap-1 sm:static">
                 <ThemeToggle />
                 <a
                   href="https://github.com/eudegabrielf"

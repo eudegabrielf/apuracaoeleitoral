@@ -453,6 +453,7 @@ export function ElectionMap({
                 aria-label="Pesquisar município"
                 placeholder="Pesquisar município"
                 leadingIcon={RiSearchLine}
+                fieldClassName="border border-border-button-default"
                 value={municipalityQuery}
                 onChange={setMunicipalityQuery}
                 isDisabled={!states || !municipalities}
@@ -467,7 +468,7 @@ export function ElectionMap({
                           <Button
                             variant="ghost"
                             size="small"
-                            className="w-full justify-start"
+                            className="w-full justify-start bg-transparent text-text-primary hover:bg-background-tertiary-hover active:bg-background-tertiary-default"
                             onClick={() => selectMunicipality(feature)}
                           >
                             {feature.properties.nome} · {feature.properties.sigla}

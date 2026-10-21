@@ -43,6 +43,15 @@ type ElectionMapResults = {
 };
 type CachedMapResults = { turn: number; stateId: string | null; data: ElectionMapResults };
 type HoveredFeature = { feature: MapFeature; left: number; top: number };
+type MapPointer = { x: number; y: number };
+type PinchGesture = {
+  pointerIds: [number, number];
+  distance: number;
+  zoom: number;
+  pan: { x: number; y: number };
+  center: MapPointer;
+  moved: boolean;
+};
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -166,8 +175,10 @@ export function ElectionMap({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapSvgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef(1);
+  const activePointersRef = useRef(new Map<number, MapPointer>());
+  const pinchRef = useRef<PinchGesture | null>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
-  const suppressClickRef = useRef(false);
+  const suppressClickUntilRef = useRef(0);
   const stateFeatures = states?.features ?? [];
   const municipalityFeatures = municipalities?.features ?? [];
   const features = useMemo(
@@ -389,14 +400,72 @@ export function ElectionMap({
   }, [getTooltipPosition]);
 
   const handleMapPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (event.button !== 0) return;
-    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
-    if (event.target instanceof SVGElement) {
-      event.target.setPointerCapture(event.pointerId);
+    if (event.button !== 0 || activePointersRef.current.size >= 2) return;
+    suppressClickUntilRef.current = 0;
+    const svg = event.currentTarget;
+    svg.setPointerCapture(event.pointerId);
+    const activePointers = activePointersRef.current;
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointers.size === 1) {
+      dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+    } else if (activePointers.size === 2) {
+      const [first, second] = [...activePointers.entries()];
+      if (!first || !second) return;
+      const center = {
+        x: (first[1].x + second[1].x) / 2,
+        y: (first[1].y + second[1].y) / 2,
+      };
+      pinchRef.current = {
+        pointerIds: [first[0], second[0]],
+        distance: Math.max(1, Math.hypot(first[1].x - second[1].x, first[1].y - second[1].y)),
+        zoom: zoomRef.current,
+        pan: { ...pan },
+        center,
+        moved: true,
+      };
+      dragRef.current = null;
+      setIsPanning(true);
     }
   };
 
   const handleMapPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const activePointers = activePointersRef.current;
+    if (!activePointers.has(event.pointerId)) return;
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    const pinch = pinchRef.current;
+    if (pinch && activePointers.size >= 2) {
+      const first = activePointers.get(pinch.pointerIds[0]);
+      const second = activePointers.get(pinch.pointerIds[1]);
+      if (!first || !second) return;
+
+      const distance = Math.max(1, Math.hypot(first.x - second.x, first.y - second.y));
+      const center = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+      const rect = event.currentTarget.getBoundingClientRect();
+      const toViewPoint = (point: MapPointer) => ({
+        x: ((point.x - rect.left) / rect.width) * 640,
+        y: ((point.y - rect.top) / rect.height) * 580,
+      });
+      const startCenter = toViewPoint(pinch.center);
+      const currentCenter = toViewPoint(center);
+      const nextZoom = Math.max(1, Math.min(4, pinch.zoom * (distance / pinch.distance)));
+      const scale = nextZoom / pinch.zoom;
+      const nextPan = {
+        x: currentCenter.x - 320 - scale * (startCenter.x - 320 - pinch.pan.x),
+        y: currentCenter.y - 290 - scale * (startCenter.y - 290 - pinch.pan.y),
+      };
+
+      if (Math.abs(distance - pinch.distance) > 4 || Math.hypot(center.x - pinch.center.x, center.y - pinch.center.y) > 4) {
+        pinch.moved = true;
+      }
+      zoomRef.current = nextZoom;
+      setZoom(nextZoom);
+      setPan(nextPan);
+      setIsPanning(pinch.moved);
+      return;
+    }
+
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const deltaX = event.clientX - drag.x;
@@ -415,12 +484,32 @@ export function ElectionMap({
 
   const handleMapPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    suppressClickRef.current = drag.moved;
-    dragRef.current = null;
-    setIsPanning(false);
-    if (event.target instanceof SVGElement && event.target.hasPointerCapture(event.pointerId)) {
-      event.target.releasePointerCapture(event.pointerId);
+    const pinch = pinchRef.current;
+    if (!activePointersRef.current.has(event.pointerId)) return;
+    const moved = Boolean(drag?.moved || pinch?.moved);
+    activePointersRef.current.delete(event.pointerId);
+
+    if (activePointersRef.current.size === 1) {
+      const [remainingPointerId, point] = [...activePointersRef.current.entries()][0]!;
+      pinchRef.current = null;
+      dragRef.current = {
+        pointerId: remainingPointerId,
+        x: point.x,
+        y: point.y,
+        moved,
+      };
+      setIsPanning(moved);
+    } else {
+      pinchRef.current = null;
+      dragRef.current = null;
+      setIsPanning(false);
+      if (moved) {
+        suppressClickUntilRef.current = performance.now() + 500;
+      }
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
   };
 
@@ -596,8 +685,8 @@ export function ElectionMap({
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (suppressClickRef.current) {
-                      suppressClickRef.current = false;
+                    if (suppressClickUntilRef.current >= performance.now()) {
+                      suppressClickUntilRef.current = 0;
                       return;
                     }
                     if (!selectedState) {

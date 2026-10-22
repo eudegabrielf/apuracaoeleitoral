@@ -171,7 +171,7 @@ function CandidateResult({
         </p>
         <div
           aria-label={`${formatPercent(candidate.percentage)} dos votos`}
-          className="mt-2 h-1.5 overflow-hidden rounded-full bg-background-tertiary-default"
+          className="mt-2 h-1.5 overflow-hidden rounded-full bg-background-quaternary-default"
         >
           <div
             className={cx("h-full rounded-full transition-[width]", getCandidateColor(candidate).activeBackground)}

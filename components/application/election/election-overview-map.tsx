@@ -500,7 +500,6 @@ export function ElectionOverviewMap({
           if (level === "states") {
             onSelectStateRef.current(selectedFeature);
             onSelectMunicipalityRef.current(null);
-            setLevel("municipalities");
           } else {
             void loadBoundaries("states")
               .then((states) => {

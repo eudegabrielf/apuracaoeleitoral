@@ -130,7 +130,7 @@ function getMigrationGroups(results: FirstRoundResults): MigrationGroup[] {
     },
     {
       id: "abstention",
-      label: "Não compareceu",
+      label: "Abstenções",
       detail: `${formatNumber(results.statistics.abstentions)} eleitores`,
     },
   ];
@@ -393,7 +393,7 @@ export function SecondRoundSimulator() {
         },
         { key: "blank", label: "Voto em branco", color: "var(--color-text-tertiary)" },
         { key: "null", label: "Voto nulo", color: "var(--color-text-secondary)" },
-        { key: "abstention", label: "Não compareceu", color: "var(--color-text-primary)" },
+        { key: "abstention", label: "Abstenções", color: "var(--color-text-primary)" },
       ] satisfies { key: AllocationTarget; label: string; color: string; candidate?: CandidateIdentity }[]
     : [];
 
@@ -498,7 +498,10 @@ export function SecondRoundSimulator() {
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.8fr)]">
-          <div className="flex min-w-0 flex-col gap-5">
+          <div className={cx(
+            "flex min-w-0 flex-col gap-5 lg:order-1",
+            hasSimulated ? "order-2" : "order-1",
+          )}>
             <section
               aria-labelledby="scenario-heading"
               className="rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6"
@@ -635,7 +638,10 @@ export function SecondRoundSimulator() {
             </section>
           </div>
 
-          <aside className="flex min-w-0 flex-col gap-5">
+          <aside className={cx(
+            "flex min-w-0 flex-col gap-5 lg:order-2",
+            hasSimulated ? "order-1" : "order-2",
+          )}>
             <section
               aria-labelledby="projection-heading"
               className="rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6 lg:sticky lg:top-4"
@@ -675,7 +681,7 @@ export function SecondRoundSimulator() {
                         <p className="mt-1 text-caption-1-regular tabular-nums text-text-secondary">
                           {formatNumber(Math.round(votes))} votos no cenário
                         </p>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-background-tertiary-default">
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-background-quaternary-default">
                           <div
                             className={cx("h-full rounded-full transition-[width]", getCandidateColor(candidate).activeBackground)}
                             style={{ width: `${Math.max(0, Math.min(100, percentage))}%` }}
@@ -846,7 +852,7 @@ export function SecondRoundSimulator() {
                         </div>
                         <div className="sm:col-start-2">
                           <div
-                            className="h-1.5 overflow-hidden rounded-full bg-background-tertiary-default"
+                            className="h-1.5 overflow-hidden rounded-full bg-background-quaternary-default"
                             role="progressbar"
                             aria-label={`Percentual de ${group.label} distribuído`}
                             aria-valuemin={0}

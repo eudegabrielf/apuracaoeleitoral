@@ -13,6 +13,14 @@ import { cx } from "@/utils/cx";
 
 type BoundaryProperties = { id: string; name: string; uf: string };
 type BoundaryCollection = FeatureCollection<Polygon | MultiPolygon, BoundaryProperties>;
+type RegionBoundaryCollection = FeatureCollection<
+  import("geojson").MultiLineString,
+  { name: string }
+>;
+type RegionLabelCollection = FeatureCollection<
+  import("geojson").Point,
+  { name: string }
+>;
 type OverviewFeature = Feature<Polygon | MultiPolygon, BoundaryProperties & {
   winnerColor: string;
   secondColor: string;
@@ -63,6 +71,21 @@ const sourceId = "election-overview-regions";
 const fillLayerId = "election-overview-fill";
 const outlineLayerId = "election-overview-outline";
 const mapResultsRefreshInterval = 30_000;
+const stateRegions: Record<string, string> = {
+  AC: "Norte", AP: "Norte", AM: "Norte", PA: "Norte", RO: "Norte", RR: "Norte", TO: "Norte",
+  AL: "Nordeste", BA: "Nordeste", CE: "Nordeste", MA: "Nordeste", PB: "Nordeste",
+  PE: "Nordeste", PI: "Nordeste", RN: "Nordeste", SE: "Nordeste",
+  DF: "Centro-Oeste", GO: "Centro-Oeste", MT: "Centro-Oeste", MS: "Centro-Oeste",
+  ES: "Sudeste", MG: "Sudeste", RJ: "Sudeste", SP: "Sudeste",
+  PR: "Sul", RS: "Sul", SC: "Sul",
+};
+const regionLabelCoordinates: Record<string, [number, number]> = {
+  Norte: [-60, -3],
+  Nordeste: [-39, -8],
+  "Centro-Oeste": [-53, -14],
+  Sudeste: [-43, -20],
+  Sul: [-51, -28],
+};
 const numberFormat = new Intl.NumberFormat("pt-BR");
 const percentFormat = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 1,
@@ -70,6 +93,102 @@ const percentFormat = new Intl.NumberFormat("pt-BR", {
 });
 let municipalityBoundaries: Promise<BoundaryCollection> | null = null;
 let stateBoundaries: Promise<BoundaryCollection> | null = null;
+
+function createRegionBoundaries(states: BoundaryCollection): RegionBoundaryCollection {
+  const segmentsByRegion = new Map<
+    string,
+    Map<string, { count: number; coordinates: [[number, number], [number, number]] }>
+  >();
+
+  for (const feature of states.features) {
+    const region = stateRegions[feature.properties.uf.toUpperCase()];
+    if (!region) continue;
+    let segments = segmentsByRegion.get(region);
+    if (!segments) {
+      segments = new Map();
+      segmentsByRegion.set(region, segments);
+    }
+    const polygons = feature.geometry.type === "Polygon"
+      ? [feature.geometry.coordinates]
+      : feature.geometry.coordinates;
+
+    for (const polygon of polygons) {
+      for (const ring of polygon) {
+        for (let index = 1; index < ring.length; index += 1) {
+          const first = ring[index - 1];
+          const second = ring[index];
+          if (!first || !second) continue;
+          const start: [number, number] = [first[0] ?? 0, first[1] ?? 0];
+          const end: [number, number] = [second[0] ?? 0, second[1] ?? 0];
+          const firstKey = start.map((coordinate) => coordinate.toFixed(5)).join(",");
+          const secondKey = end.map((coordinate) => coordinate.toFixed(5)).join(",");
+          const key = firstKey < secondKey
+            ? `${firstKey}|${secondKey}`
+            : `${secondKey}|${firstKey}`;
+          const existing = segments.get(key);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            segments.set(key, { count: 1, coordinates: [start, end] });
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: Array.from(segmentsByRegion, ([name, segments]) => ({
+      type: "Feature" as const,
+      properties: { name },
+      geometry: {
+        type: "MultiLineString" as const,
+        coordinates: Array.from(segments.values())
+          .filter((segment) => segment.count === 1)
+          .map((segment) => segment.coordinates),
+      },
+    })),
+  };
+}
+
+function createRegionLabels(): RegionLabelCollection {
+  return {
+    type: "FeatureCollection",
+    features: Object.entries(regionLabelCoordinates).map(([name, coordinates]) => ({
+      type: "Feature",
+      properties: { name },
+      geometry: { type: "Point", coordinates },
+    })),
+  };
+}
+
+function getGeometryBounds(geometry: Geometry): [[number, number], [number, number]] {
+  const bounds = { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY,
+    maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY };
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      for (const position of ring) {
+        const longitude = position[0];
+        const latitude = position[1];
+        if (longitude == null || latitude == null) continue;
+        bounds.minX = Math.min(bounds.minX, longitude);
+        bounds.minY = Math.min(bounds.minY, latitude);
+        bounds.maxX = Math.max(bounds.maxX, longitude);
+        bounds.maxY = Math.max(bounds.maxY, latitude);
+      }
+    }
+  }
+  return [[bounds.minX, bounds.minY], [bounds.maxX, bounds.maxY]];
+}
+
+function zoomToMunicipality(map: MapLibreMap, geometry: Geometry) {
+  map.fitBounds(getGeometryBounds(geometry), {
+    padding: 56,
+    maxZoom: 10,
+    duration: 900,
+  });
+}
 
 async function readMapResultsStream(
   response: Response,
@@ -331,6 +450,8 @@ export function ElectionOverviewMap({
   onSelectMunicipality: (feature: MapFeature | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const selectedMunicipalityRef = useRef(selectedMunicipality);
   const onSelectStateRef = useRef(onSelectState);
   const onSelectMunicipalityRef = useRef(onSelectMunicipality);
   const resultsCache = useRef(new Map<string, OverviewResults>());
@@ -346,6 +467,7 @@ export function ElectionOverviewMap({
   const [error, setError] = useState<string | null>(null);
   onSelectStateRef.current = onSelectState;
   onSelectMunicipalityRef.current = onSelectMunicipality;
+  selectedMunicipalityRef.current = selectedMunicipality;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -403,6 +525,10 @@ export function ElectionOverviewMap({
       try {
         const boundaries = await loadBoundaries(level);
         if (!active) return;
+        const regionBoundaries = level === "municipalities"
+          ? createRegionBoundaries(await loadBoundaries("states"))
+          : null;
+        if (!active) return;
         const resultsCacheKey = `${turn}:${level}`;
         const cachedResults = resultsCache.current.get(resultsCacheKey);
         const data = addElectionResults(boundaries, {
@@ -430,6 +556,7 @@ export function ElectionOverviewMap({
           maxZoom: 12,
           attributionControl: {},
         });
+        mapRef.current = map;
         map.addControl(new NavigationControl({ showCompass: false }), "top-right");
         map.on("load", () => {
           if (!map || !active) return;
@@ -466,7 +593,53 @@ export function ElectionOverviewMap({
             beforeId,
           );
 
-          map.fitBounds([[-74.5, -34], [-34, 5.5]], { padding: 36, duration: 0 });
+          if (regionBoundaries) {
+            map.addSource("election-overview-regions-outline", {
+              type: "geojson",
+              data: regionBoundaries,
+            });
+            map.addLayer({
+              id: "election-overview-region-outline",
+              type: "line",
+              source: "election-overview-regions-outline",
+              paint: {
+                "line-color": dark ? "#d4d4d8" : "#52525b",
+                "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.4, 8, 2.2],
+                "line-opacity": 0.9,
+              },
+            });
+            map.addSource("election-overview-region-labels", {
+              type: "geojson",
+              data: createRegionLabels(),
+            });
+            map.addLayer({
+              id: "election-overview-region-label",
+              type: "symbol",
+              source: "election-overview-region-labels",
+              layout: {
+                "text-field": ["get", "name"],
+                "text-font": ["Open Sans Semibold"],
+                "text-size": ["interpolate", ["linear"], ["zoom"], 3, 11, 6, 15],
+                "text-allow-overlap": true,
+              },
+              paint: {
+                "text-color": dark ? "#f4f4f5" : "#27272a",
+                "text-halo-color": dark ? "#18181b" : "#ffffff",
+                "text-halo-width": 1.5,
+                "text-opacity": 0.88,
+              },
+            });
+          }
+
+          const selectedMunicipality = selectedMunicipalityRef.current;
+          const selectedBoundary = selectedMunicipality
+            ? boundaries.features.find((feature) => feature.properties.id === selectedMunicipality.properties.id)
+            : undefined;
+          if (level === "municipalities" && selectedBoundary) {
+            zoomToMunicipality(map, toMapGeometry(selectedBoundary.geometry));
+          } else {
+            map.fitBounds([[-74.5, -34], [-34, 5.5]], { padding: 36, duration: 0 });
+          }
           mapReady = true;
           if (latestResultsData) {
             const source = map.getSource(sourceId);
@@ -614,12 +787,19 @@ export function ElectionOverviewMap({
       if (resultsRefreshTimer !== null) window.clearTimeout(resultsRefreshTimer);
       popup?.remove();
       map?.remove();
+      if (mapRef.current === map) mapRef.current = null;
     };
   }, [
     dark,
     level,
     turn,
   ]);
+
+  useEffect(() => {
+    if (level !== "municipalities" || !selectedMunicipality) return;
+    const map = mapRef.current;
+    if (map) zoomToMunicipality(map, selectedMunicipality.geometry);
+  }, [level, selectedMunicipality?.properties.id]);
 
   const selectMunicipality = async (
     feature: BoundaryCollection["features"][number],

@@ -1,11 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { RiExternalLinkLine } from "@remixicon/react";
 import { Badge } from "@/components/base/badges/badge";
-import { ElectionMap, type MapFeature } from "@/components/application/election/election-map";
+import { ElectionOverviewMap } from "@/components/application/election/election-overview-map";
+import type { MapFeature } from "@/components/application/election/election-map";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
+import { ElectionDataNotice } from "@/components/application/election/election-data-notice";
 import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
 
 type Candidate = {
@@ -22,7 +24,7 @@ type Results = {
   municipality: string | null;
   sourceUrl: string;
   updatedAt: string | null;
-  sections: { total: number | null; counted: number | null; percentage: number | null };
+  sections?: { total: number | null; counted: number | null; percentage: number | null };
   statistics: {
     eligibleVoters: number | null;
     voters: number | null;
@@ -91,6 +93,10 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
   const locality = municipality?.properties.nome ?? state?.properties.nome ?? "Brasil";
   const voters = results?.statistics.voters;
   const eligibleVoters = results?.statistics.eligibleVoters;
+  const selectState = useCallback((feature: MapFeature | null) => {
+    setState(feature);
+    setMunicipality(null);
+  }, []);
 
   return (
     <section className="flex flex-col gap-4">
@@ -102,29 +108,17 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
               Selecione um município no mapa para consultar a apuração local.
             </p>
           </div>
-          {turn === 2 && results?.sections.counted === 0 && (
+          {turn === 2 && results?.sections?.counted === 0 && (
             <Badge color="neutral">Aguardando início da apuração</Badge>
           )}
       </header>
 
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-        <ElectionMap
+        <ElectionOverviewMap
           selectedState={state}
           selectedMunicipality={municipality}
-          selectedMunicipalityResults={
-            municipality && results?.municipality === municipality.properties.id ? results : null
-          }
-          selectedMunicipalityLoading={Boolean(
-            municipality && results?.municipality !== municipality.properties.id && !error,
-          )}
-          selectedMunicipalityError={
-            municipality && results?.municipality !== municipality.properties.id ? error : null
-          }
           turn={turn}
-          onSelectState={(feature) => {
-            setState(feature);
-            setMunicipality(null);
-          }}
+          onSelectState={selectState}
           onSelectMunicipality={setMunicipality}
         />
 
@@ -141,9 +135,12 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
               </div>
             </div>
             {error ? (
-              <p role="alert" className="mt-4 rounded-2xl bg-background-secondary-default p-4 text-body-2-regular text-text-primary">
-                {error}
-              </p>
+              <div className="mt-4">
+                <ElectionDataNotice
+                  message={error}
+                  detail="Aguarde a publicação oficial do TSE para consultar os resultados desta localidade."
+                />
+              </div>
             ) : !results ? (
               <div role="status" aria-label="Carregando resultado da localidade" className="mt-4 space-y-5">
                 <span className="sr-only">Consultando a publicação oficial do TSE…</span>
@@ -214,12 +211,12 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
                   <div className="py-3">
                     <dt className="text-caption-1-regular text-text-tertiary">Seções totalizadas</dt>
                     <dd className="mt-1 text-body-medium tabular-nums text-text-primary">
-                      {results.sections.counted == null
+                      {results.sections?.counted == null
                         ? "—"
                         : `${formatNumber(results.sections.counted)} / ${formatNumber(results.sections.total)}`}
                     </dd>
                     <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                      {formatPercent(results.sections.percentage)}
+                      {formatPercent(results.sections?.percentage)}
                     </dd>
                   </div>
                 </dl>

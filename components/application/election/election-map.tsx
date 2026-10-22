@@ -44,6 +44,122 @@ type ElectionMapResults = {
   updatedAt: string | null;
   sourceUrl: string;
 };
+export type SimulatedElectionMapResults = {
+  candidates: Candidate[];
+  results: Record<string, LocalityWinner>;
+  unpublished: number;
+  failed: number;
+  updatedAt: string | null;
+  sourceUrl: string;
+};
+
+const simulatedMapStateTiles = [
+  { id: "12", uf: "AC", name: "Acre", column: 1, row: 4 },
+  { id: "13", uf: "AM", name: "Amazonas", column: 2, row: 3 },
+  { id: "16", uf: "AP", name: "Amapá", column: 6, row: 1 },
+  { id: "17", uf: "TO", name: "Tocantins", column: 4, row: 4 },
+  { id: "11", uf: "RO", name: "Rondônia", column: 2, row: 4 },
+  { id: "14", uf: "RR", name: "Roraima", column: 4, row: 1 },
+  { id: "15", uf: "PA", name: "Pará", column: 5, row: 2 },
+  { id: "21", uf: "MA", name: "Maranhão", column: 5, row: 3 },
+  { id: "22", uf: "PI", name: "Piauí", column: 6, row: 3 },
+  { id: "23", uf: "CE", name: "Ceará", column: 7, row: 3 },
+  { id: "24", uf: "RN", name: "Rio Grande do Norte", column: 8, row: 3 },
+  { id: "25", uf: "PB", name: "Paraíba", column: 8, row: 4 },
+  { id: "26", uf: "PE", name: "Pernambuco", column: 7, row: 5 },
+  { id: "27", uf: "AL", name: "Alagoas", column: 8, row: 5 },
+  { id: "28", uf: "SE", name: "Sergipe", column: 7, row: 6 },
+  { id: "29", uf: "BA", name: "Bahia", column: 6, row: 4 },
+  { id: "31", uf: "MG", name: "Minas Gerais", column: 5, row: 5 },
+  { id: "32", uf: "ES", name: "Espírito Santo", column: 6, row: 6 },
+  { id: "33", uf: "RJ", name: "Rio de Janeiro", column: 6, row: 7 },
+  { id: "35", uf: "SP", name: "São Paulo", column: 4, row: 6 },
+  { id: "41", uf: "PR", name: "Paraná", column: 4, row: 7 },
+  { id: "42", uf: "SC", name: "Santa Catarina", column: 4, row: 8 },
+  { id: "43", uf: "RS", name: "Rio Grande do Sul", column: 3, row: 9 },
+  { id: "50", uf: "MS", name: "Mato Grosso do Sul", column: 3, row: 5 },
+  { id: "51", uf: "MT", name: "Mato Grosso", column: 3, row: 3 },
+  { id: "52", uf: "GO", name: "Goiás", column: 4, row: 5 },
+  { id: "53", uf: "DF", name: "Distrito Federal", column: 5, row: 4 },
+] as const;
+
+function SimulatedMapFallback({
+  results,
+  error,
+}: {
+  results: SimulatedElectionMapResults;
+  error: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-background-secondary-default p-4 sm:p-6">
+      <p role="status" className="mb-4 text-caption-1-regular text-text-secondary">
+        Limites do IBGE indisponíveis. Exibindo um cartograma esquemático por estado.
+      </p>
+      <div
+        aria-label="Cartograma esquemático dos resultados simulados por estado"
+        className="mx-auto grid max-w-4xl gap-1.5 sm:gap-2"
+        style={{
+          gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
+          gridTemplateRows: "repeat(9, minmax(3.5rem, auto))",
+        }}
+      >
+        {simulatedMapStateTiles.map((state) => {
+          const winner = results.results[state.id];
+          const leader = winner?.leaders[0];
+          const candidate = leader
+            ? results.candidates.find((entry) => entry.id === leader.candidateId)
+            : undefined;
+          const color = candidate ? getCandidateColor(candidate) : null;
+
+          return (
+            <div
+              key={state.id}
+              aria-label={`${state.name}: ${
+                candidate
+                  ? `${candidate.name}, ${leader!.percentage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
+                  : "sem votos atribuídos a finalistas neste cenário"
+              }`}
+              title={`${state.name}${candidate ? ` · ${candidate.name} ${leader!.percentage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : ""}`}
+              className={cx(
+                "flex min-w-0 flex-col items-center justify-center rounded-lg border border-border-button-default px-1 py-1 text-center",
+                color ? color.activeBackground : "bg-background-tertiary-default",
+              )}
+              style={{
+                gridColumn: state.column,
+                gridRow: state.row,
+              }}
+            >
+              <span className="text-caption-1-semibold text-text-primary">{state.uf}</span>
+              {leader && (
+                <span className="hidden text-[10px] leading-3 text-text-primary sm:block">
+                  {leader.percentage.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <ul aria-label="Legenda de candidatos do mapa" className="mt-5 flex flex-wrap gap-x-4 gap-y-3">
+        {results.candidates.map((candidate) => {
+          const color = getCandidateColor(candidate);
+          return (
+            <li key={candidate.id} className="flex items-center gap-2">
+              <span aria-hidden className={cx("size-3 rounded-sm", color.fill)} />
+              <span className="text-caption-1-regular text-text-secondary">{candidate.name}</span>
+            </li>
+          );
+        })}
+        <li className="flex items-center gap-2">
+          <span aria-hidden className="size-3 rounded-sm bg-background-tertiary-default" />
+          <span className="text-caption-1-regular text-text-secondary">
+            Empate ou sem votos atribuídos
+          </span>
+        </li>
+      </ul>
+      <p className="mt-3 text-caption-1-regular text-text-tertiary">{error}</p>
+    </div>
+  );
+}
 type CachedMapResults = { turn: number; stateId: string | null; data: ElectionMapResults };
 type SelectedMunicipalityResults = {
   municipality: string | null;
@@ -160,6 +276,7 @@ export function ElectionMap({
   selectedMunicipalityLoading,
   selectedMunicipalityError,
   turn,
+  simulatedResults,
   preview = false,
 }: {
   onSelectState: (feature: MapFeature | null) => void;
@@ -170,6 +287,7 @@ export function ElectionMap({
   selectedMunicipalityLoading: boolean;
   selectedMunicipalityError: string | null;
   turn: number;
+  simulatedResults?: SimulatedElectionMapResults;
   preview?: boolean;
 }) {
   const [states, setStates] = useState<MapData | null>(null);
@@ -251,6 +369,12 @@ export function ElectionMap({
   }, []);
 
   useEffect(() => {
+    if (simulatedResults) {
+      setMunicipalities(null);
+      setLoadingMunicipalities(false);
+      return;
+    }
+
     let active = true;
     setMunicipalities(null);
     setLoadingMunicipalities(true);
@@ -275,9 +399,15 @@ export function ElectionMap({
     return () => {
       active = false;
     };
-  }, []);
+  }, [simulatedResults]);
 
   useEffect(() => {
+    if (simulatedResults) {
+      setLoadingElectionResults(false);
+      setResultsError(null);
+      return;
+    }
+
     let active = true;
     setResultsError(null);
     setLoadingElectionResults(true);
@@ -325,7 +455,7 @@ export function ElectionMap({
       active = false;
       window.clearInterval(timer);
     };
-  }, [selectedState?.properties.id, turn]);
+  }, [selectedState?.properties.id, simulatedResults, turn]);
 
   const nationalElectionResults = nationalResults?.turn === turn ? nationalResults.data : null;
   const focusedElectionResults = selectedState && focusedResults?.turn === turn &&
@@ -372,7 +502,7 @@ export function ElectionMap({
       sourceUrl: selectedMunicipalityResults.sourceUrl,
     };
   }, [selectedMunicipality, selectedMunicipalityResults, selectedState]);
-  const electionResults = selectedState
+  const electionResults = simulatedResults ?? (selectedState
     ? focusedElectionResults && selectedMunicipalityMapResults
       ? {
           ...focusedElectionResults,
@@ -380,7 +510,7 @@ export function ElectionMap({
           results: { ...focusedElectionResults.results, ...selectedMunicipalityMapResults.results },
         }
       : focusedElectionResults ?? selectedMunicipalityMapResults
-    : nationalElectionResults;
+    : nationalElectionResults);
   const selectMunicipality = (feature: MapFeature) => {
     const stateFeature = stateFeatures.find(
       (state) => state.properties.sigla?.toUpperCase() === feature.properties.sigla?.toUpperCase(),
@@ -588,7 +718,7 @@ export function ElectionMap({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
-            Mapa eleitoral
+            {simulatedResults ? "Mapa simulado" : "Mapa eleitoral"}
           </p>
           <h2 className="mt-1 text-title-3-semibold text-text-primary">
             {selectedMunicipality?.properties.nome ??
@@ -596,7 +726,9 @@ export function ElectionMap({
               "Brasil por estado"}
           </h2>
           <p className="mt-1 text-body-2-regular text-text-secondary">
-            {preview
+            {simulatedResults
+              ? "Passe o cursor sobre os estados para consultar a liderança deste cenário."
+              : preview
               ? "Passe o cursor para comparar as lideranças. Clique para abrir o mapa detalhado."
               : selectedState
                 ? "Selecione um município para consultar a apuração local."
@@ -658,7 +790,9 @@ export function ElectionMap({
         </div>
       </div>
 
-      {error ? (
+      {error && simulatedResults ? (
+        <SimulatedMapFallback results={simulatedResults} error={error} />
+      ) : error ? (
         <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-2xl bg-background-secondary-default p-6 text-center">
           <p className="text-body-medium text-text-primary">{error}</p>
           <p className="text-body-2-regular text-text-secondary">
@@ -724,7 +858,9 @@ export function ElectionMap({
           )}
           {!resultsError && electionResults && electionResults.unpublished > 0 && (
             <p className="mb-3 rounded-xl bg-background-tertiary-default p-3 text-body-2-regular text-text-secondary">
-              Ainda não há resultados publicados para {electionResults.unpublished} áreas deste mapa.
+              {simulatedResults
+                ? `Não foi possível calcular a simulação para ${electionResults.unpublished} estados porque faltam dados oficiais completos.`
+                : `Ainda não há resultados publicados para ${electionResults.unpublished} áreas deste mapa.`}
             </p>
           )}
           {!resultsError && electionResults && electionResults.failed > 0 && (
@@ -770,8 +906,8 @@ export function ElectionMap({
                   key={feature.properties.id}
                   data-map-feature-id={feature.properties.id}
                   d={featurePaths.get(feature.properties.id ?? "") ?? ""}
-                  role="button"
-                  tabIndex={0}
+                  role={simulatedResults ? "img" : "button"}
+                  tabIndex={simulatedResults ? -1 : 0}
                   aria-label={
                     `${feature.properties.nome}${!selectedState && feature.properties.sigla ? `, ${feature.properties.sigla}` : ""}${winner?.leaders.map((leader, index) => {
                       const name = electionResults?.candidates.find((entry) => entry.id === leader.candidateId)?.name;
@@ -788,6 +924,7 @@ export function ElectionMap({
                     ? { fill: color.variable, fillOpacity: getWinnerIntensity(winner) }
                     : { fill: "var(--color-background-tertiary-default)" }}
                   onClick={(event) => {
+                    if (simulatedResults) return;
                     event.preventDefault();
                     event.stopPropagation();
                     if (suppressClickUntilRef.current >= performance.now()) {
@@ -816,6 +953,7 @@ export function ElectionMap({
                   }}
                   onBlur={() => setHoveredFeature(null)}
                   onKeyDown={(event) => {
+                    if (simulatedResults) return;
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       if (!selectedState) {
@@ -911,7 +1049,9 @@ export function ElectionMap({
                 if (selectedState && featureId !== selectedMunicipality?.properties.id) {
                   return (
                     <p className="mt-2 text-caption-1-regular text-text-secondary">
-                      Clique neste município para consultar os dados oficiais.
+                      {simulatedResults
+                        ? "O mapa mostra apenas o resultado simulado por estado."
+                        : "Clique neste município para consultar os dados oficiais."}
                     </p>
                   );
                 }
@@ -957,7 +1097,9 @@ export function ElectionMap({
                           />
                           <div className="min-w-0">
                             <p className="truncate text-caption-1-medium text-text-tertiary">
-                              {index === 0 ? "1º lugar" : "2º lugar"}
+                              {simulatedResults
+                                ? `${index === 0 ? "1º" : "2º"} na simulação`
+                                : index === 0 ? "1º lugar" : "2º lugar"}
                             </p>
                             <p className="truncate text-body-2-medium text-text-primary">{entry.name}</p>
                             <p className="text-caption-1-regular text-text-secondary">
@@ -989,7 +1131,9 @@ export function ElectionMap({
                 if (result?.published) {
                   return (
                     <p className="mt-2 text-caption-1-regular text-text-secondary">
-                      Nenhum voto totalizado nesta área.
+                      {simulatedResults
+                        ? "Nenhum voto foi atribuído a um finalista neste estado."
+                        : "Nenhum voto totalizado nesta área."}
                     </p>
                   );
                 }
@@ -1015,7 +1159,7 @@ export function ElectionMap({
       {electionResults && (
         <div className="mt-5 border-t border-separator-border pt-4">
           <p className="text-caption-1-semibold text-text-primary">
-            Liderança por {selectedState ? "município" : "estado"} · {turn}º turno
+            {simulatedResults ? "Liderança simulada por estado" : `Liderança por ${selectedState ? "município" : "estado"} · ${turn}º turno`}
           </p>
           <ul aria-label="Legenda de candidatos do mapa" className="mt-3 flex flex-wrap gap-x-4 gap-y-3">
             {electionResults.candidates.map((candidate) => {
@@ -1045,16 +1189,20 @@ export function ElectionMap({
             </li>
           </ul>
           <p className="mt-3 text-caption-1-regular text-text-tertiary">
-            A intensidade da cor representa a vantagem em pontos percentuais. Créditos: resultados oficiais — Tribunal Superior Eleitoral; malhas territoriais — IBGE. · Atualização a cada 30 segundos.
+            {simulatedResults
+              ? "As cores refletem a liderança do cenário preenchido. A simulação usa votos oficiais do TSE e malhas territoriais do IBGE."
+              : "A intensidade da cor representa a vantagem em pontos percentuais. Créditos: resultados oficiais — Tribunal Superior Eleitoral; malhas territoriais — IBGE. · Atualização a cada 30 segundos."}
           </p>
-          <a
-            href={electionResults.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex text-caption-1-medium text-text-secondary hover:text-text-primary"
-          >
-            Conferir dados nacionais do turno no TSE
-          </a>
+          {!simulatedResults && (
+            <a
+              href={electionResults.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-caption-1-medium text-text-secondary hover:text-text-primary"
+            >
+              Conferir dados nacionais do turno no TSE
+            </a>
+          )}
         </div>
       )}
     </section>

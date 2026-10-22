@@ -57,7 +57,26 @@ function parseCount(value?: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export const dynamic = "force-dynamic";
+async function fetchTSEResults(url: string, requestSignal: AbortSignal): Promise<Response> {
+  const retryableStatuses = new Set([429, 502, 503, 504]);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        next: { revalidate: 10 },
+        signal: AbortSignal.any([requestSignal, AbortSignal.timeout(12_000)]),
+      });
+      if (!retryableStatuses.has(response.status) || attempt === 2) return response;
+      await response.body?.cancel();
+    } catch (error) {
+      if (requestSignal.aborted || attempt === 2) throw error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt));
+  }
+
+  throw new Error("The TSE results request exhausted its retry attempts.");
+}
 
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
@@ -123,10 +142,7 @@ export async function GET(request: Request) {
 
   let response: Response;
   try {
-    response = await fetch(sourceUrl, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(12_000),
-    });
+    response = await fetchTSEResults(sourceUrl, request.signal);
   } catch (error) {
     console.error("TSE results request failed", error);
     return NextResponse.json(
@@ -227,6 +243,6 @@ export async function GET(request: Request) {
       },
       candidates,
     },
-    { headers: { "Cache-Control": "no-store" } },
+    { headers: { "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30" } },
   );
 }

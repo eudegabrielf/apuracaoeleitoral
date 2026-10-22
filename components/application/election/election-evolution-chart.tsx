@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
 import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
+import { firstRoundCandidates } from "@/components/application/election/first-round-candidates";
 import type { ElectionResults } from "@/components/application/election/election-dashboard";
 
 type Snapshot = {
@@ -13,14 +14,6 @@ type Snapshot = {
   completed?: boolean;
   candidates: { id: string; votes: number; percentage: number }[];
 };
-
-const firstRoundCandidates: ElectionResults["candidates"] = [
-  { id: "280002551544", number: "22", name: "FLAVIO BOLSONARO", party: "PL", votes: 56_104_503, percentage: 47.027772356 },
-  { id: "280002542548", number: "13", name: "LULA", party: "PT", votes: 53_879_538, percentage: 45.162767911 },
-  { id: "280002551547", number: "70", name: "ESCRITOR AUGUSTO CURY", party: "AVANTE", votes: 3_448_569, percentage: 2.890650647 },
-  { id: "280002540694", number: "14", name: "RENAN SANTOS", party: "MISSÃO", votes: 2_675_887, percentage: 2.242975126 },
-  { id: "280002551932", number: "55", name: "RONALDO CAIADO", party: "PSD", votes: 2_605_148, percentage: 2.183680463 },
-];
 
 const firstRoundHistory: Snapshot[] = [
   {
@@ -205,7 +198,7 @@ export function ElectionEvolutionChart({
       loadedTurn !== turn ||
       historyError ||
       !results?.updatedAt ||
-      results.sections.counted == null ||
+      results.sections?.counted == null ||
       results.sections.counted === 0 ||
       snapshots.some((snapshot) => snapshot.completed)
     ) return;
@@ -303,7 +296,7 @@ export function ElectionEvolutionChart({
         <p role="alert" className="mt-5 rounded-xl bg-background-secondary-default p-4 text-body-2-regular text-text-primary">
           {historyError}
         </p>
-      ) : turn === 2 && results?.sections.counted === 0 ? (
+      ) : turn === 2 && results?.sections?.counted === 0 ? (
         <p role="status" className="mt-5 rounded-xl bg-background-secondary-default p-4 text-body-2-regular text-text-secondary">
           A evolução aparecerá quando a primeira votação oficial do segundo turno for publicada.
         </p>

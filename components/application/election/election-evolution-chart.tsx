@@ -15,6 +15,8 @@ type Snapshot = {
   candidates: { id: string; votes: number; percentage: number }[];
 };
 
+const snapshotInterval = 10 * 60 * 1000;
+
 const firstRoundHistory: Snapshot[] = [
   {
     observedAt: new Date("2026-10-04T17:25:57-03:00").getTime(),
@@ -115,7 +117,7 @@ function readSnapshots(turn: number): Snapshot[] {
   if (!Array.isArray(parsed) || !parsed.every(isSnapshot)) {
     throw new Error("O histórico local da apuração tem um formato inválido.");
   }
-  return parsed
+  const snapshots = parsed
     .filter(isSnapshot)
     .flatMap((snapshot) => {
       const observedAt = parseSourceTimestamp(snapshot.sourceUpdatedAt);
@@ -124,6 +126,14 @@ function readSnapshots(turn: number): Snapshot[] {
         : [{ ...snapshot, observedAt, completed: snapshot.completed ?? false }];
     })
     .sort((left, right) => left.observedAt - right.observedAt);
+
+  return snapshots.reduce<Snapshot[]>((sampled, snapshot) => {
+    const previous = sampled[sampled.length - 1];
+    if (!previous || snapshot.observedAt - previous.observedAt >= snapshotInterval || snapshot.completed) {
+      sampled.push(snapshot);
+    }
+    return sampled;
+  }, []);
 }
 
 const formatTime = (value: number) =>
@@ -135,27 +145,33 @@ const formatTime = (value: number) =>
     minute: "2-digit",
   });
 
-function getHourlyTicks(snapshots: Snapshot[]) {
+function getTimeTicks(snapshots: Snapshot[], interval: number) {
   const first = snapshots[0]?.observedAt;
   const last = snapshots[snapshots.length - 1]?.observedAt;
   if (first == null || last == null) return [];
 
-  const hour = 60 * 60 * 1000;
   const ticks = [first];
-  for (let tick = Math.ceil(first / hour) * hour; tick < last; tick += hour) {
+  for (let tick = Math.ceil(first / interval) * interval; tick < last; tick += interval) {
     ticks.push(tick);
   }
   if (last !== first) ticks.push(last);
   return ticks;
 }
 
-function formatHourTick(value: number, first: number, last: number) {
+function formatTimeTick(value: number, first: number, last: number, interval: number) {
   if (value === first || value === last) return formatTime(value);
-  const hour = new Intl.DateTimeFormat("pt-BR", {
+  if (interval === 60 * 60 * 1000) {
+    const hour = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+    }).format(value);
+    return `${hour}h`;
+  }
+  return new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
     hour: "2-digit",
+    minute: "2-digit",
   }).format(value);
-  return `${hour}h`;
 }
 
 function formatPercent(value: number | undefined) {
@@ -174,6 +190,7 @@ export function ElectionEvolutionChart({
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loadedTurn, setLoadedTurn] = useState<number | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [selectedSnapshotIndex, setSelectedSnapshotIndex] = useState(0);
 
   useEffect(() => {
     if (turn === 1) {
@@ -220,10 +237,13 @@ export function ElectionEvolutionChart({
       if (current.some((entry) => entry.completed)) return current;
       const previous = current[current.length - 1];
       const previousSignature = previous
-        ? JSON.stringify([previous.sourceUpdatedAt, previous.sectionsCounted, previous.candidates])
+        ? JSON.stringify([previous.sourceUpdatedAt, previous.sectionsCounted, previous.completed, previous.candidates])
         : null;
-      const nextSignature = JSON.stringify([snapshot.sourceUpdatedAt, snapshot.sectionsCounted, snapshot.candidates]);
+      const nextSignature = JSON.stringify([snapshot.sourceUpdatedAt, snapshot.sectionsCounted, snapshot.completed, snapshot.candidates]);
       if (previousSignature === nextSignature) return current;
+      if (previous && snapshot.observedAt - previous.observedAt < snapshotInterval && !snapshot.completed) {
+        return current;
+      }
       return [...current, snapshot].slice(-1200);
     });
   }, [historyError, loadedTurn, results, snapshots, turn]);
@@ -244,9 +264,12 @@ export function ElectionEvolutionChart({
   const chartSnapshots = turn === 1 ? firstRoundHistory : snapshots;
   const historyLoading = turn === 2 && (loadedTurn !== turn || (loading && !results));
   const visibleCandidateIds = new Set(chartCandidates.map((candidate) => candidate.id));
-  const hourlyTicks = getHourlyTicks(chartSnapshots);
+  const tickInterval = turn === 1 ? 60 * 60 * 1000 : snapshotInterval;
+  const timeTicks = getTimeTicks(chartSnapshots, tickInterval);
   const firstTimestamp = chartSnapshots[0]?.observedAt ?? 0;
   const lastTimestamp = chartSnapshots[chartSnapshots.length - 1]?.observedAt ?? 0;
+  const selectedSnapshot = chartSnapshots[Math.min(selectedSnapshotIndex, chartSnapshots.length - 1)];
+  const chartWidth = Math.max(1480, timeTicks.length * 72);
   const data = chartSnapshots.map((snapshot) => ({
     ...Object.fromEntries(
       snapshot.candidates
@@ -256,6 +279,12 @@ export function ElectionEvolutionChart({
     observedAt: snapshot.observedAt,
     sourceUpdatedAt: snapshot.sourceUpdatedAt,
   }));
+
+  useEffect(() => {
+    if (chartSnapshots.length > 0) {
+      setSelectedSnapshotIndex(chartSnapshots.length - 1);
+    }
+  }, [chartSnapshots.length, turn]);
 
   return (
     <section className="rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6">
@@ -307,18 +336,26 @@ export function ElectionEvolutionChart({
       ) : (
         <>
           <div className="mt-5 w-full overflow-x-auto overscroll-x-contain rounded-2xl bg-background-secondary-default">
-            <div className="h-80 min-w-[1480px] p-4">
+            <div className="h-80 p-4" style={{ width: `${chartWidth}px` }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+              <ComposedChart
+                data={data}
+                margin={{ top: 8, right: 12, bottom: 4, left: 0 }}
+                onMouseMove={(state) => {
+                  if (typeof state.activeTooltipIndex === "number") {
+                    setSelectedSnapshotIndex(state.activeTooltipIndex);
+                  }
+                }}
+              >
                 <CartesianGrid vertical={false} stroke="var(--color-separator-border)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="observedAt"
                   type="number"
                   scale="time"
                   domain={["dataMin", "dataMax"]}
-                  ticks={hourlyTicks}
+                  ticks={timeTicks}
                   interval={0}
-                  tickFormatter={(value) => formatHourTick(Number(value), firstTimestamp, lastTimestamp)}
+                  tickFormatter={(value) => formatTimeTick(Number(value), firstTimestamp, lastTimestamp, tickInterval)}
                   tickLine={false}
                   axisLine={false}
                   tickMargin={12}
@@ -333,15 +370,8 @@ export function ElectionEvolutionChart({
                   tick={{ fontSize: 12, fill: "var(--color-text-tertiary)" }}
                 />
                 <Tooltip
-                  labelFormatter={(value) => `Observado às ${formatTime(Number(value))}`}
-                  formatter={(value, name) => [`${Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`, String(name)]}
+                  content={() => null}
                   cursor={{ stroke: "var(--color-chart-cursor)", strokeWidth: 1, strokeDasharray: "4 4" }}
-                  contentStyle={{
-                    background: "var(--color-background-primary-default)",
-                    border: "1px solid var(--color-border-button-default)",
-                    borderRadius: 12,
-                    color: "var(--color-text-primary)",
-                  }}
                 />
                 {chartCandidates.map((candidate) => {
                   const color = getCandidateColor(candidate);
@@ -369,17 +399,38 @@ export function ElectionEvolutionChart({
             </div>
           </div>
 
-          <p className="mb-1 mt-4 text-caption-1-semibold text-text-tertiary">Percentual final</p>
-          <ul aria-label="Percentual final por candidato" className="grid grid-cols-1 gap-x-5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-caption-1-semibold text-text-tertiary">Resultado neste momento</p>
+              <p className="mt-1 text-caption-1-regular text-text-secondary">
+                {selectedSnapshot ? `Dados observados em ${formatTime(selectedSnapshot.observedAt)}` : "Selecione um momento no gráfico"}
+              </p>
+            </div>
+            <label className="flex w-full flex-col gap-1 text-caption-1-medium text-text-secondary sm:max-w-xs">
+              Selecionar horário
+              <select
+                value={selectedSnapshot ? Math.min(selectedSnapshotIndex, chartSnapshots.length - 1) : ""}
+                onChange={(event) => setSelectedSnapshotIndex(Number(event.target.value))}
+                className="rounded-xl border border-border-button-default bg-background-primary-default px-3 py-2 text-body-2-regular text-text-primary"
+              >
+                {chartSnapshots.map((snapshot, index) => (
+                  <option key={`${snapshot.observedAt}-${index}`} value={index}>
+                    {formatTime(snapshot.observedAt)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <ul aria-label="Percentual por candidato no momento selecionado" className="mt-2 grid grid-cols-1 gap-x-5 sm:grid-cols-2 xl:grid-cols-3">
             {chartCandidates.map((candidate) => {
               const color = getCandidateColor(candidate);
-              const finalPercentage = chartSnapshots[chartSnapshots.length - 1]?.candidates
+              const percentage = selectedSnapshot?.candidates
                 .find((entry) => entry.id === candidate.id)?.percentage;
               return (
-                <li key={candidate.id} aria-label={`${candidate.name}: ${formatPercent(finalPercentage)}`} title={candidate.name} className="flex min-w-0 items-center gap-2 border-b border-separator-border py-2">
+                <li key={candidate.id} aria-label={`${candidate.name}: ${formatPercent(percentage)}`} title={candidate.name} className="flex min-w-0 items-center gap-2 border-b border-separator-border py-2">
                   <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${color.activeBackground}`} />
                   <span className="min-w-0 flex-1 truncate text-caption-1-regular text-text-secondary">{candidate.name}</span>
-                  <span className="shrink-0 text-caption-1-medium tabular-nums text-text-primary">{formatPercent(finalPercentage)}</span>
+                  <span className="shrink-0 text-caption-1-medium tabular-nums text-text-primary">{formatPercent(percentage)}</span>
                 </li>
               );
             })}
@@ -393,7 +444,7 @@ export function ElectionEvolutionChart({
                 </a>.
               </>
             ) : (
-              "Horários baseados nas publicações oficiais do TSE. A série começa na primeira seção totalizada e termina quando o TSE conclui a apuração."
+              "O histórico local registra no máximo um novo ponto a cada 10 minutos, quando há novos resultados oficiais do TSE. Selecione um ponto no gráfico ou no campo de horário para consultar os percentuais."
             )}
           </p>
         </>

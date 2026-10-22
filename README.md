@@ -17,7 +17,7 @@ A aplicação reúne dados publicados pelo TSE e limites geográficos do IBGE. E
 - Busca global de municípios, com seleção direta da cidade e do respectivo estado.
 - Detalhes de liderança, empate e situação da publicação oficial ao interagir com o mapa.
 - Zoom, navegação pelo mapa e recorte por município.
-- Evolução dos resultados por publicação oficial. O histórico observado durante o uso fica no armazenamento local do navegador.
+- Evolução dos resultados por publicação oficial. No segundo turno, o histórico local evita registrar pontos com intervalo inferior a 10 minutos, preservando também a publicação final; as curvas permitem consultar o percentual de cada candidatura no horário selecionado. O histórico fica no armazenamento local do navegador.
 - Tema claro/escuro e layout responsivo.
 
 ## Fontes e atribuições

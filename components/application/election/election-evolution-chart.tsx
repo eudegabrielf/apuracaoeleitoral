@@ -385,10 +385,10 @@ export function ElectionEvolutionChart({
           </ul>
           {turn === 1 && (
             <p className="mt-3 text-caption-1-regular text-text-tertiary">
-                Série oficial do TSE, do início da apuração em 04/10 às 17:25 até a conclusão em 05/10 às 12:51. Eixo horário a cada hora; os pontos são as capturas oficiais disponíveis. Dados via{" "}
-                <a href={firstRoundArchiveUrl} target="_blank" rel="noreferrer" className="underline hover:text-text-primary">
-                  captura arquivada
-                </a>.
+              Série oficial do TSE, do início da apuração em 04/10 às 17:25 até a conclusão em 05/10 às 12:51. Eixo horário a cada hora; a série usa as capturas oficiais disponíveis. Dados via{" "}
+              <a href={firstRoundArchiveUrl} target="_blank" rel="noreferrer" className="underline hover:text-text-primary">
+                captura arquivada
+              </a>.
             </p>
           )}
         </>

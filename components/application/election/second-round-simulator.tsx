@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   RiArrowLeftLine,
   RiCloseLine,
@@ -273,11 +274,12 @@ function MigrationSlider({
       </span>
       <input
         aria-label={`Percentual de ${sourceLabel} destinado a ${targetLabel}`}
-        className="col-span-2 h-2 w-full cursor-pointer appearance-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+        className="migration-slider col-span-2 h-2 w-full cursor-pointer appearance-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
         style={{
-          background: `linear-gradient(to right, ${color} ${filledPercent}%, var(--color-background-tertiary-default) ${filledPercent}%)`,
+          "--migration-slider-color": color,
+          "--migration-slider-value": `${filledPercent}%`,
           accentColor: color,
-        }}
+        } as CSSProperties}
         type="range"
         min={0}
         max={100}
@@ -764,9 +766,6 @@ export function SecondRoundSimulator() {
                 <h2 id="migration-heading" className="mt-1 text-title-3-semibold text-text-primary">
                   Migração de votos
                 </h2>
-                <p className="mt-1 text-body-2-regular text-text-secondary">
-                  Distribua cada grupo entre os finalistas, votos em branco, votos nulos e quem não comparece. Percentuais não destinados permanecem sem migração.
-                </p>
               </div>
               <Button
                 variant="secondary"
@@ -803,8 +802,6 @@ export function SecondRoundSimulator() {
                   {migrationGroups.map((group) => {
                     const allocation = draftAllocations[group.id] ?? emptyAllocation();
                     const candidate = results.candidates.find((entry) => entry.id === group.id);
-                    const isFinalist =
-                      candidate?.id === defaultFinalists.first || candidate?.id === defaultFinalists.second;
                     const allocated = sumAllocation(allocation);
                     const remaining = Math.max(0, 100 - allocated);
 
@@ -825,11 +822,6 @@ export function SecondRoundSimulator() {
                           <div className="min-w-0">
                             <p className="truncate text-body-medium text-text-primary">
                               {group.label}
-                              {isFinalist && (
-                                <span className="ml-2 text-caption-1-medium text-text-tertiary">
-                                  Finalista
-                                </span>
-                              )}
                             </p>
                             <p className="text-caption-1-regular text-text-secondary">{group.detail}</p>
                           </div>

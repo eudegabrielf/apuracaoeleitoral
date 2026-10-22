@@ -284,7 +284,7 @@ function MigrationSlider({
         min={0}
         max={100}
         aria-valuemax={max}
-        step={1}
+        step={0.5}
         value={value}
         onChange={(event) => onChange(Math.min(Number(event.currentTarget.value), max))}
       />
@@ -860,8 +860,13 @@ export function SecondRoundSimulator() {
                             aria-valuenow={allocated}
                           >
                             <div
-                              className="h-full rounded-full bg-text-primary transition-[width]"
-                              style={{ width: `${allocated}%` }}
+                              className="h-full rounded-full transition-[width,background-color]"
+                              style={{
+                                width: `${allocated}%`,
+                                backgroundColor: allocated >= 100
+                                  ? "var(--color-chart-7-active)"
+                                  : "var(--color-chart-11-active)",
+                              }}
                             />
                           </div>
                           <p className="mt-1 text-right text-caption-1-regular text-text-tertiary">

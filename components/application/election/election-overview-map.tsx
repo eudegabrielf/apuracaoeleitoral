@@ -13,13 +13,9 @@ import { cx } from "@/utils/cx";
 
 type BoundaryProperties = { id: string; name: string; uf: string };
 type BoundaryCollection = FeatureCollection<Polygon | MultiPolygon, BoundaryProperties>;
-type RegionBoundaryCollection = FeatureCollection<
-  import("geojson").MultiLineString,
-  { name: string }
->;
-type RegionLabelCollection = FeatureCollection<
+type StateLabelCollection = FeatureCollection<
   import("geojson").Point,
-  { name: string }
+  { uf: string }
 >;
 type OverviewFeature = Feature<Polygon | MultiPolygon, BoundaryProperties & {
   winnerColor: string;
@@ -70,22 +66,11 @@ const darkStyleUrl = "https://tiles.openfreemap.org/styles/dark";
 const sourceId = "election-overview-regions";
 const fillLayerId = "election-overview-fill";
 const outlineLayerId = "election-overview-outline";
+const stateBoundarySourceId = "election-overview-state-boundaries";
+const stateBoundaryLayerId = "election-overview-state-boundary";
+const stateLabelsSourceId = "election-overview-state-labels";
+const stateLabelsLayerId = "election-overview-state-label";
 const mapResultsRefreshInterval = 30_000;
-const stateRegions: Record<string, string> = {
-  AC: "Norte", AP: "Norte", AM: "Norte", PA: "Norte", RO: "Norte", RR: "Norte", TO: "Norte",
-  AL: "Nordeste", BA: "Nordeste", CE: "Nordeste", MA: "Nordeste", PB: "Nordeste",
-  PE: "Nordeste", PI: "Nordeste", RN: "Nordeste", SE: "Nordeste",
-  DF: "Centro-Oeste", GO: "Centro-Oeste", MT: "Centro-Oeste", MS: "Centro-Oeste",
-  ES: "Sudeste", MG: "Sudeste", RJ: "Sudeste", SP: "Sudeste",
-  PR: "Sul", RS: "Sul", SC: "Sul",
-};
-const regionLabelCoordinates: Record<string, [number, number]> = {
-  Norte: [-60, -3],
-  Nordeste: [-39, -8],
-  "Centro-Oeste": [-53, -14],
-  Sudeste: [-43, -20],
-  Sul: [-51, -28],
-};
 const numberFormat = new Intl.NumberFormat("pt-BR");
 const percentFormat = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 1,
@@ -94,91 +79,42 @@ const percentFormat = new Intl.NumberFormat("pt-BR", {
 let municipalityBoundaries: Promise<BoundaryCollection> | null = null;
 let stateBoundaries: Promise<BoundaryCollection> | null = null;
 
-function createRegionBoundaries(states: BoundaryCollection): RegionBoundaryCollection {
-  const segmentsByRegion = new Map<
-    string,
-    Map<string, { count: number; coordinates: [[number, number], [number, number]] }>
-  >();
-
-  for (const feature of states.features) {
-    const region = stateRegions[feature.properties.uf.toUpperCase()];
-    if (!region) continue;
-    let segments = segmentsByRegion.get(region);
-    if (!segments) {
-      segments = new Map();
-      segmentsByRegion.set(region, segments);
-    }
-    const polygons = feature.geometry.type === "Polygon"
-      ? [feature.geometry.coordinates]
-      : feature.geometry.coordinates;
-
-    for (const polygon of polygons) {
-      for (const ring of polygon) {
-        for (let index = 1; index < ring.length; index += 1) {
-          const first = ring[index - 1];
-          const second = ring[index];
-          if (!first || !second) continue;
-          const start: [number, number] = [first[0] ?? 0, first[1] ?? 0];
-          const end: [number, number] = [second[0] ?? 0, second[1] ?? 0];
-          const firstKey = start.map((coordinate) => coordinate.toFixed(5)).join(",");
-          const secondKey = end.map((coordinate) => coordinate.toFixed(5)).join(",");
-          const key = firstKey < secondKey
-            ? `${firstKey}|${secondKey}`
-            : `${secondKey}|${firstKey}`;
-          const existing = segments.get(key);
-          if (existing) {
-            existing.count += 1;
-          } else {
-            segments.set(key, { count: 1, coordinates: [start, end] });
-          }
-        }
-      }
-    }
-  }
-
+function createStateLabels(states: BoundaryCollection): StateLabelCollection {
   return {
     type: "FeatureCollection",
-    features: Array.from(segmentsByRegion, ([name, segments]) => ({
-      type: "Feature" as const,
-      properties: { name },
-      geometry: {
-        type: "MultiLineString" as const,
-        coordinates: Array.from(segments.values())
-          .filter((segment) => segment.count === 1)
-          .map((segment) => segment.coordinates),
-      },
-    })),
+    features: states.features.map((feature) => {
+      const [[west, south], [east, north]] = getGeometryBounds(feature.geometry);
+      return {
+        type: "Feature",
+        properties: { uf: feature.properties.uf },
+        geometry: {
+          type: "Point",
+          coordinates: [(west + east) / 2, (south + north) / 2],
+        },
+      };
+    }),
   };
 }
 
-function createRegionLabels(): RegionLabelCollection {
-  return {
-    type: "FeatureCollection",
-    features: Object.entries(regionLabelCoordinates).map(([name, coordinates]) => ({
-      type: "Feature",
-      properties: { name },
-      geometry: { type: "Point", coordinates },
-    })),
-  };
-}
-
-function getGeometryBounds(geometry: Geometry): [[number, number], [number, number]] {
+function getGeometryBounds(
+  geometry: Polygon | MultiPolygon | Geometry,
+): [[number, number], [number, number]] {
   const bounds = { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY,
     maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY };
-  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
-  for (const polygon of polygons) {
-    for (const ring of polygon) {
-      for (const position of ring) {
-        const longitude = position[0];
-        const latitude = position[1];
-        if (longitude == null || latitude == null) continue;
-        bounds.minX = Math.min(bounds.minX, longitude);
-        bounds.minY = Math.min(bounds.minY, latitude);
-        bounds.maxX = Math.max(bounds.maxX, longitude);
-        bounds.maxY = Math.max(bounds.maxY, latitude);
-      }
+  function visitCoordinates(coordinates: unknown) {
+    if (!Array.isArray(coordinates)) return;
+    if (typeof coordinates[0] === "number" && typeof coordinates[1] === "number") {
+      const longitude = coordinates[0];
+      const latitude = coordinates[1];
+      bounds.minX = Math.min(bounds.minX, longitude);
+      bounds.minY = Math.min(bounds.minY, latitude);
+      bounds.maxX = Math.max(bounds.maxX, longitude);
+      bounds.maxY = Math.max(bounds.maxY, latitude);
+      return;
     }
+    coordinates.forEach(visitCoordinates);
   }
+  visitCoordinates(geometry.coordinates);
   return [[bounds.minX, bounds.minY], [bounds.maxX, bounds.maxY]];
 }
 
@@ -525,8 +461,8 @@ export function ElectionOverviewMap({
       try {
         const boundaries = await loadBoundaries(level);
         if (!active) return;
-        const regionBoundaries = level === "municipalities"
-          ? createRegionBoundaries(await loadBoundaries("states"))
+        const stateBoundaries = level === "municipalities"
+          ? await loadBoundaries("states")
           : null;
         if (!active) return;
         const resultsCacheKey = `${turn}:${level}`;
@@ -593,40 +529,40 @@ export function ElectionOverviewMap({
             beforeId,
           );
 
-          if (regionBoundaries) {
-            map.addSource("election-overview-regions-outline", {
+          if (stateBoundaries) {
+            map.addSource(stateBoundarySourceId, {
               type: "geojson",
-              data: regionBoundaries,
+              data: stateBoundaries,
             });
             map.addLayer({
-              id: "election-overview-region-outline",
+              id: stateBoundaryLayerId,
               type: "line",
-              source: "election-overview-regions-outline",
+              source: stateBoundarySourceId,
               paint: {
-                "line-color": dark ? "#d4d4d8" : "#52525b",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.4, 8, 2.2],
-                "line-opacity": 0.9,
+                "line-color": dark ? "#f4f4f5" : "#3f3f46",
+                "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2],
+                "line-opacity": 0.95,
               },
             });
-            map.addSource("election-overview-region-labels", {
+            map.addSource(stateLabelsSourceId, {
               type: "geojson",
-              data: createRegionLabels(),
+              data: createStateLabels(stateBoundaries),
             });
             map.addLayer({
-              id: "election-overview-region-label",
+              id: stateLabelsLayerId,
               type: "symbol",
-              source: "election-overview-region-labels",
+              source: stateLabelsSourceId,
               layout: {
-                "text-field": ["get", "name"],
+                "text-field": ["get", "uf"],
                 "text-font": ["Open Sans Semibold"],
-                "text-size": ["interpolate", ["linear"], ["zoom"], 3, 11, 6, 15],
+                "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 7, 13],
                 "text-allow-overlap": true,
               },
               paint: {
                 "text-color": dark ? "#f4f4f5" : "#27272a",
                 "text-halo-color": dark ? "#18181b" : "#ffffff",
-                "text-halo-width": 1.5,
-                "text-opacity": 0.88,
+                "text-halo-width": 1.4,
+                "text-opacity": 0.95,
               },
             });
           }

@@ -227,6 +227,14 @@ input[type="search"]::-webkit-search-cancel-button {
   font-size: 11px;
 }
 
+.simulator-cta,
+.simulator-cta:hover,
+.simulator-cta:active {
+  border-color: var(--color-text-primary);
+  background-color: var(--color-text-primary);
+  color: var(--color-background-primary-default);
+}
+
 /* Recharts' accessibility layer makes the chart surface and its shapes
  * (bars, sectors, dots) keyboard-focusable, and Chrome paints the UA focus
  * outline around whichever one you click - a blue box around a ring segment

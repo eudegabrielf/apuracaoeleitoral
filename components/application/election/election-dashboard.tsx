@@ -420,7 +420,7 @@ export function ElectionDashboard() {
                 variant="secondary"
                 size="medium"
                 trailingIcon={RiArrowRightLine}
-                className="border-text-primary bg-text-primary text-background-primary-default hover:border-text-primary hover:bg-text-primary"
+                className="simulator-cta"
               >
                 Simular segundo turno
               </ButtonLink>

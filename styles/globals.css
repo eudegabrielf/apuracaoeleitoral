@@ -235,6 +235,22 @@ input[type="search"]::-webkit-search-cancel-button {
   color: var(--color-background-primary-default);
 }
 
+.runoff-simulation-trigger:not(:disabled),
+.runoff-simulation-trigger:hover:not(:disabled),
+.runoff-simulation-trigger:active:not(:disabled) {
+  border-color: #000;
+  background-color: #000;
+  color: #fff;
+}
+
+.dark .runoff-simulation-trigger:not(:disabled),
+.dark .runoff-simulation-trigger:hover:not(:disabled),
+.dark .runoff-simulation-trigger:active:not(:disabled) {
+  border-color: #fff;
+  background-color: #fff;
+  color: #000;
+}
+
 .migration-slider {
   --migration-slider-color: var(--color-text-primary);
   --migration-slider-value: 0%;

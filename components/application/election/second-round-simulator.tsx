@@ -555,6 +555,7 @@ export function SecondRoundSimulator() {
                 <Button
                   variant="secondary"
                   size="small"
+                  className="runoff-simulation-trigger"
                   onClick={openMigrationModal}
                   disabled={!results || !firstFinalist || !secondFinalist}
                 >

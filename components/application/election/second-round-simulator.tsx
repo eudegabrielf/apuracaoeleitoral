@@ -728,9 +728,11 @@ export function SecondRoundSimulator() {
                       </div>
                     </div>
                   )}
-                  <p className="mt-4 rounded-2xl bg-background-secondary-default p-3 text-caption-1-regular text-text-secondary">
-                    {formatNumber(Math.round(projection.unallocatedCandidateVotes))} votos de candidaturas permanecem sem destinação, não entram na votação dos finalistas e não alteram o comparecimento projetado.
-                  </p>
+                  {Math.round(projection.unallocatedCandidateVotes) > 0 && (
+                    <p className="mt-4 rounded-2xl bg-background-secondary-default p-3 text-caption-1-regular text-text-secondary">
+                      {formatNumber(Math.round(projection.unallocatedCandidateVotes))} votos das outras candidaturas não foram distribuídos entre Flávio Bolsonaro e Lula e, por isso, ficam fora da votação projetada.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="mt-4 rounded-2xl bg-background-secondary-default p-4 text-body-2-regular text-text-secondary">

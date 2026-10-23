@@ -14,11 +14,13 @@ type StateProperties = {
   winnerId: string;
   winnerName: string;
   winnerColor: string;
+  secondColor: string;
   firstVotes: number;
   firstPercentage: number;
   secondName: string;
   secondVotes: number;
   secondPercentage: number;
+  firstRoundWinnerName: string;
   tie: boolean;
 };
 
@@ -26,11 +28,13 @@ type StateBoundaries = FeatureCollection<Polygon | MultiPolygon, Omit<StatePrope
   | "winnerId"
   | "winnerName"
   | "winnerColor"
+  | "secondColor"
   | "firstVotes"
   | "firstPercentage"
   | "secondName"
   | "secondVotes"
   | "secondPercentage"
+  | "firstRoundWinnerName"
   | "tie"
 >>;
 
@@ -41,11 +45,13 @@ type HoveredState = {
   name: string;
   winnerName: string;
   winnerColor: string;
+  secondColor: string;
   firstVotes: number;
   firstPercentage: number;
   secondName: string;
   secondVotes: number;
   secondPercentage: number;
+  firstRoundWinnerName: string;
   tie: boolean;
 };
 
@@ -78,6 +84,7 @@ function resolveMapColor(cssVariable: string): string {
 function getSimulatedBoundaries(
   boundaries: StateBoundaries,
   results: SimulatedElectionMapResults,
+  firstRoundWinners: Record<string, string>,
 ): SimulatedBoundaries {
   return {
     ...boundaries,
@@ -106,11 +113,15 @@ function getSimulatedBoundaries(
           winnerColor: firstCandidate
             ? resolveMapColor(getCandidateColor(firstCandidate).variable)
             : "#94a3b8",
+          secondColor: secondCandidate
+            ? resolveMapColor(getCandidateColor(secondCandidate).variable)
+            : "#94a3b8",
           firstVotes: first?.votes ?? 0,
           firstPercentage: first?.percentage ?? 0,
           secondName: secondCandidate?.name ?? "",
           secondVotes: second?.votes ?? 0,
           secondPercentage: second?.percentage ?? 0,
+          firstRoundWinnerName: firstRoundWinners[feature.properties.id] ?? "Sem dados oficiais",
           tie,
         },
       };
@@ -126,6 +137,16 @@ function createStatePopup(state: HoveredState) {
   title.className = "simulated-map-popup-title";
   title.textContent = state.name;
   container.append(title);
+
+  const comparison = document.createElement("p");
+  comparison.className = "simulated-map-popup-winner";
+  comparison.textContent = `1º turno oficial: ${state.firstRoundWinnerName}`;
+  container.append(comparison);
+
+  const scenarioLeader = document.createElement("p");
+  scenarioLeader.className = "simulated-map-popup-winner";
+  scenarioLeader.textContent = `Líder no cenário: ${state.winnerName}`;
+  container.append(scenarioLeader);
 
   if (state.tie) {
     const tie = document.createElement("p");
@@ -145,7 +166,7 @@ function createStatePopup(state: HoveredState) {
       name: state.secondName,
       votes: state.secondVotes,
       percentage: state.secondPercentage,
-      color: "#94a3b8",
+      color: state.secondColor,
     },
   ];
 
@@ -172,14 +193,17 @@ function createStatePopup(state: HoveredState) {
 export function SimulatedElectionMap({
   results,
   scope,
+  firstRoundWinners,
 }: {
   results: SimulatedElectionMapResults;
   scope: "states" | "municipalities";
+  firstRoundWinners: Record<string, string>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const boundariesRef = useRef<StateBoundaries | null>(null);
   const resultsRef = useRef(results);
+  const firstRoundWinnersRef = useRef(firstRoundWinners);
   const installLayersRef = useRef<(() => void) | null>(null);
   const hoveredIdRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +211,7 @@ export function SimulatedElectionMap({
   const [dark, setDark] = useState(false);
 
   resultsRef.current = results;
+  firstRoundWinnersRef.current = firstRoundWinners;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -218,7 +243,11 @@ export function SimulatedElectionMap({
         const source = mapRef.current?.getSource("simulated-states") as
           | import("maplibre-gl").GeoJSONSource
           | undefined;
-        if (source) source.setData(getSimulatedBoundaries(data, resultsRef.current));
+        if (source) {
+          source.setData(
+            getSimulatedBoundaries(data, resultsRef.current, firstRoundWinnersRef.current),
+          );
+        }
         else installLayersRef.current?.();
       })
       .catch((reason: unknown) => {
@@ -259,7 +288,11 @@ export function SimulatedElectionMap({
           if (!map.getSource("simulated-states") && boundariesRef.current) {
             map.addSource("simulated-states", {
               type: "geojson",
-              data: getSimulatedBoundaries(boundariesRef.current, resultsRef.current),
+              data: getSimulatedBoundaries(
+                boundariesRef.current,
+                resultsRef.current,
+                firstRoundWinnersRef.current,
+              ),
               promoteId: "id",
             });
           }
@@ -399,9 +432,11 @@ export function SimulatedElectionMap({
       | import("maplibre-gl").GeoJSONSource
       | undefined;
     if (source && boundariesRef.current) {
-      source.setData(getSimulatedBoundaries(boundariesRef.current, results));
+      source.setData(
+        getSimulatedBoundaries(boundariesRef.current, results, firstRoundWinners),
+      );
     }
-  }, [results]);
+  }, [firstRoundWinners, results]);
 
   const legendCandidates = results.candidates.slice(0, 2);
 
@@ -456,7 +491,7 @@ export function SimulatedElectionMap({
         </span>
       </div>
       <p className="text-caption-1-regular text-text-tertiary">
-        Limites geográficos: IBGE.
+        Limites geográficos: IBGE. As cores representam o cenário hipotético definido pelo usuário, comparado à liderança oficial do 1º turno.
       </p>
     </div>
   );

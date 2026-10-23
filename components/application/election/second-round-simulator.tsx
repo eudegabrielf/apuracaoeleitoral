@@ -14,8 +14,11 @@ import { Badge } from "@/components/base/badges/badge";
 import { Button, ButtonLink } from "@/components/base/buttons/button";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
 import { ElectionDataNotice } from "@/components/application/election/election-data-notice";
+import { ElectionOverviewMap } from "@/components/application/election/election-overview-map";
 import { firstRoundCandidates } from "@/components/application/election/first-round-candidates";
+import type { MapFeature } from "@/components/application/election/election-map";
 import { ThemeToggle } from "@/components/application/election/theme-toggle";
+import type { SimulatedElectionMapResults } from "@/components/application/election/election-map";
 import { cx } from "@/utils/cx";
 
 type Candidate = {
@@ -59,6 +62,12 @@ type LocalityTotals = {
   abstentions: number | null;
   blankVotes: number | null;
   nullVotes: number | null;
+};
+type FirstRoundMapData = {
+  sourceUrl: string;
+  updatedAt: string | null;
+  stateTotals?: Record<string, LocalityTotals>;
+  municipalityTotals?: Record<string, LocalityTotals>;
 };
 
 const numberFormat = new Intl.NumberFormat("pt-BR");
@@ -212,6 +221,72 @@ function calculateProjection(
   };
 }
 
+function createProjectedMapResults(
+  mapData: FirstRoundMapData,
+  allocations: Record<string, Allocation>,
+  finalists: [Candidate, Candidate],
+  localityTotals: Record<string, LocalityTotals> = mapData.stateTotals ?? {},
+) {
+  const firstRoundWinners: Record<string, string> = {};
+  const results: SimulatedElectionMapResults["results"] = {};
+
+  for (const [stateId, totals] of Object.entries(localityTotals)) {
+    const firstRoundLeaders = [...totals.candidates].sort((a, b) => b.votes - a.votes);
+    const firstRoundWinner = firstRoundLeaders[0];
+    const firstRoundRunnerUp = firstRoundLeaders[1];
+    firstRoundWinners[stateId] = firstRoundWinner
+      ? firstRoundRunnerUp?.votes === firstRoundWinner.votes
+        ? `Empate entre ${firstRoundWinner.name} e ${firstRoundRunnerUp.name}`
+        : firstRoundWinner.name
+      : "Sem votos publicados";
+
+    const votesTo = (target: "first" | "second") =>
+      totals.candidates.reduce(
+        (sum, candidate) =>
+          sum + candidate.votes * ((allocations[candidate.id]?.[target] ?? 0) / 100),
+        0,
+      ) +
+      (totals.blankVotes ?? 0) * ((allocations.blank?.[target] ?? 0) / 100) +
+      (totals.nullVotes ?? 0) * ((allocations.null?.[target] ?? 0) / 100) +
+      (totals.abstentions ?? 0) * ((allocations.abstention?.[target] ?? 0) / 100);
+
+    const projectedVotes = [
+      { candidateId: finalists[0].id, votes: votesTo("first") },
+      { candidateId: finalists[1].id, votes: votesTo("second") },
+    ].sort((a, b) => b.votes - a.votes);
+    const finalistVotes = projectedVotes.reduce((sum, candidate) => sum + candidate.votes, 0);
+    const leaders = finalistVotes > 0
+      ? projectedVotes.map((candidate) => ({
+          ...candidate,
+          percentage: (candidate.votes / finalistVotes) * 100,
+        }))
+      : [];
+    const tie = leaders.length > 1 && Math.round(leaders[0]!.votes) === Math.round(leaders[1]!.votes);
+
+    results[stateId] = {
+      available: true,
+      published: true,
+      candidateId: leaders.length > 0 && !tie ? leaders[0]!.candidateId : null,
+      tieCandidateIds: tie ? leaders.map((candidate) => candidate.candidateId) : [],
+      votes: leaders[0]?.votes ?? null,
+      percentage: leaders[0]?.percentage ?? null,
+      leaders,
+    };
+  }
+
+  return {
+    firstRoundWinners,
+    results: {
+      candidates: finalists,
+      results,
+      unpublished: 0,
+      failed: 0,
+      updatedAt: mapData.updatedAt,
+      sourceUrl: mapData.sourceUrl,
+    } satisfies SimulatedElectionMapResults,
+  };
+}
+
 function createInitialAllocations(
   candidates: Candidate[],
 ): Record<string, Allocation> {
@@ -299,6 +374,20 @@ export function SecondRoundSimulator() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasSimulated, setHasSimulated] = useState(false);
+  const [firstRoundMapData, setFirstRoundMapData] = useState<FirstRoundMapData | null>(null);
+  const [firstRoundMapLoading, setFirstRoundMapLoading] = useState(false);
+  const [firstRoundMapError, setFirstRoundMapError] = useState<string | null>(null);
+  const [firstRoundMapRetry, setFirstRoundMapRetry] = useState(0);
+  const [municipalityMapData, setMunicipalityMapData] = useState<Record<string, FirstRoundMapData>>({});
+  const [municipalityMapLoading, setMunicipalityMapLoading] = useState(false);
+  const [municipalityMapError, setMunicipalityMapError] = useState<string | null>(null);
+  const [municipalityMapRetry, setMunicipalityMapRetry] = useState(0);
+  const [selectedState, setSelectedState] = useState<MapFeature | null>(null);
+  const [selectedMunicipality, setSelectedMunicipality] = useState<MapFeature | null>(null);
+  const [mapLevel, setMapLevel] = useState<"states" | "municipalities">("states");
+  const handleMapLevelChange = useCallback((level: "states" | "municipalities") => {
+    setMapLevel(level);
+  }, []);
   const [migrationModalOpen, setMigrationModalOpen] = useState(false);
   const [allocations, setAllocations] = useState<Record<string, Allocation>>({});
   const [draftAllocations, setDraftAllocations] = useState<Record<string, Allocation>>({});
@@ -367,6 +456,89 @@ export function SecondRoundSimulator() {
     };
   }, [fetchResults]);
 
+  useEffect(() => {
+    if (!hasSimulated || firstRoundMapData) return;
+    const controller = new AbortController();
+    setFirstRoundMapLoading(true);
+    setFirstRoundMapError(null);
+
+    void fetch("/api/election/map-results?turn=1&scope=states&uf=br&includeStateTotals=1", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as FirstRoundMapData | { error?: string };
+        if (!response.ok) {
+          throw new Error(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Não foi possível carregar os dados oficiais por estado.",
+          );
+        }
+        if (!("stateTotals" in payload) || !payload.stateTotals || Object.keys(payload.stateTotals).length === 0) {
+          throw new Error("O TSE não disponibilizou totais oficiais por estado para comparar o cenário.");
+        }
+        setFirstRoundMapData(payload);
+      })
+      .catch((mapError: unknown) => {
+        if (controller.signal.aborted) return;
+        setFirstRoundMapError(
+          mapError instanceof Error
+            ? mapError.message
+            : "Não foi possível carregar os dados oficiais por estado.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setFirstRoundMapLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [firstRoundMapData, firstRoundMapRetry, hasSimulated]);
+
+  useEffect(() => {
+    const stateId = selectedState?.properties.id;
+    if (!hasSimulated || mapLevel !== "municipalities" || !stateId || municipalityMapData[stateId]) return;
+    const controller = new AbortController();
+    setMunicipalityMapLoading(true);
+    setMunicipalityMapError(null);
+
+    void fetch(
+      `/api/election/map-results?turn=1&scope=municipalities&uf=${stateId}&includeMunicipalityTotals=1`,
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then(async (response) => {
+        const payload = (await response.json()) as FirstRoundMapData | { error?: string };
+        if (!response.ok) {
+          throw new Error(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Não foi possível carregar os totais oficiais dos municípios.",
+          );
+        }
+        if (
+          !("municipalityTotals" in payload) ||
+          !payload.municipalityTotals ||
+          Object.keys(payload.municipalityTotals).length === 0
+        ) {
+          throw new Error("O TSE não disponibilizou totais oficiais para os municípios desta UF.");
+        }
+        setMunicipalityMapData((current) => ({ ...current, [stateId]: payload }));
+      })
+      .catch((mapError: unknown) => {
+        if (controller.signal.aborted) return;
+        setMunicipalityMapError(
+          mapError instanceof Error
+            ? mapError.message
+            : "Não foi possível carregar os totais oficiais dos municípios.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setMunicipalityMapLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [hasSimulated, mapLevel, municipalityMapData, municipalityMapRetry, selectedState?.properties.id]);
+
   const firstFinalist = useMemo(
     () => results?.candidates.find((candidate) => candidate.id === defaultFinalists.first) ?? null,
     [results],
@@ -406,6 +578,20 @@ export function SecondRoundSimulator() {
       ...values,
     };
   }, [allocations, firstFinalist, hasSimulated, results, secondFinalist]);
+  const projectedMap = useMemo(() => {
+    if (!firstRoundMapData || !firstFinalist || !secondFinalist) return null;
+    const municipalityData = mapLevel === "municipalities" && selectedState?.properties.id
+      ? municipalityMapData[selectedState.properties.id]
+      : null;
+    return createProjectedMapResults(
+      municipalityData ?? firstRoundMapData,
+      allocations,
+      [firstFinalist, secondFinalist],
+      mapLevel === "municipalities"
+        ? municipalityData?.municipalityTotals ?? {}
+        : firstRoundMapData.stateTotals ?? {},
+    );
+  }, [allocations, firstFinalist, firstRoundMapData, mapLevel, municipalityMapData, secondFinalist, selectedState]);
 
   const updateAllocation = (
     candidateId: string,
@@ -585,10 +771,14 @@ export function SecondRoundSimulator() {
               </div>
 
               {results && (
+                <details className="mt-5 border-t border-separator-border pt-5">
+                  <summary className="cursor-pointer text-body-2-medium text-text-secondary">
+                    Consultar dados oficiais do 1º turno
+                  </summary>
                 <section
                   aria-labelledby="first-round-results-heading"
                   aria-busy={loading}
-                  className="mt-5 border-t border-separator-border pt-5"
+                  className="mt-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
@@ -652,6 +842,7 @@ export function SecondRoundSimulator() {
                     ))}
                   </div>
                 </section>
+                </details>
               )}
             </section>
           </div>
@@ -761,6 +952,76 @@ export function SecondRoundSimulator() {
 
           </aside>
         </section>
+
+        {hasSimulated && (
+          <section aria-labelledby="simulation-map-heading" className="flex flex-col gap-4">
+            <div>
+              <p className="text-caption-1-semibold uppercase tracking-wide text-text-secondary">
+                Cenário hipotético
+              </p>
+              <h2 id="simulation-map-heading" className="mt-1 text-title-3-semibold text-text-primary">
+                Projeção geográfica
+              </h2>
+            </div>
+
+            {firstRoundMapLoading && (
+              <p role="status" className="rounded-2xl bg-background-secondary-default p-4 text-body-2-regular text-text-secondary">
+                Carregando os totais oficiais do 1º turno por estado…
+              </p>
+            )}
+            {firstRoundMapError && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border-button-default bg-background-secondary-default p-4">
+                <p role="alert" className="text-body-2-regular text-text-secondary">
+                  {firstRoundMapError}
+                </p>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => {
+                    setFirstRoundMapData(null);
+                    setFirstRoundMapRetry((attempt) => attempt + 1);
+                  }}
+                >
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+            {municipalityMapLoading && selectedState && (
+              <p role="status" className="rounded-2xl bg-background-secondary-default p-4 text-body-2-regular text-text-secondary">
+                Carregando a projeção municipal de {selectedState.properties.nome} com os totais oficiais do 1º turno…
+              </p>
+            )}
+            {municipalityMapError && selectedState && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border-button-default bg-background-secondary-default p-4">
+                <p role="alert" className="text-body-2-regular text-text-secondary">
+                  {municipalityMapError}
+                </p>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => setMunicipalityMapRetry((attempt) => attempt + 1)}
+                >
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+            {projectedMap && (
+              <ElectionOverviewMap
+                onSelectState={(feature) => {
+                  setSelectedState(feature);
+                  setSelectedMunicipality(null);
+                }}
+                onSelectMunicipality={setSelectedMunicipality}
+                selectedState={selectedState}
+                selectedMunicipality={selectedMunicipality}
+                turn={1}
+                simulatedResults={projectedMap.results}
+                simulatedComparison={projectedMap.firstRoundWinners}
+                onLevelChange={handleMapLevelChange}
+              />
+            )}
+          </section>
+        )}
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-separator-border px-1 pt-4 text-caption-1-regular text-text-tertiary">
           <p>Simulador independente. Dados eleitorais: Tribunal Superior Eleitoral (TSE).</p>

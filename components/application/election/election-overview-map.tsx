@@ -27,6 +27,7 @@ type OverviewFeature = Feature<Polygon | MultiPolygon, BoundaryProperties & {
   secondName: string;
   secondVotes: number;
   secondPercentage: number;
+  firstRoundWinnerName: string;
   tie: boolean;
 }>;
 type OverviewResults = SimulatedElectionMapResults;
@@ -86,12 +87,15 @@ function createStateLabels(states: BoundaryCollection): StateLabelCollection {
     type: "FeatureCollection",
     features: states.features.map((feature) => {
       const [[west, south], [east, north]] = getGeometryBounds(feature.geometry);
+      const coordinates = feature.properties.uf === "ES"
+        ? [-40.55, -19.6]
+        : [(west + east) / 2, (south + north) / 2];
       return {
         type: "Feature",
         properties: { uf: feature.properties.uf },
         geometry: {
           type: "Point",
-          coordinates: [(west + east) / 2, (south + north) / 2],
+          coordinates,
         },
       };
     }),
@@ -249,6 +253,7 @@ function resolveMapColor(cssVariable: string): string {
 function addElectionResults(
   boundaries: BoundaryCollection,
   results: OverviewResults,
+  firstRoundWinners: Record<string, string> = {},
 ): FeatureCollection<Polygon | MultiPolygon, OverviewFeature["properties"]> {
   const candidateColors = new Map(
     results.candidates.map((candidate) => [
@@ -285,6 +290,7 @@ function addElectionResults(
           secondName: secondCandidate?.name ?? "",
           secondVotes: second?.votes ?? 0,
           secondPercentage: second?.percentage ?? 0,
+          firstRoundWinnerName: firstRoundWinners[feature.properties.id] ?? "",
           tie,
         },
       };
@@ -385,6 +391,13 @@ function createPopup(feature: OverviewFeature) {
   header.append(title, status);
   container.append(header);
 
+  if (feature.properties.firstRoundWinnerName) {
+    const firstRound = document.createElement("p");
+    firstRound.className = "election-map-popup-position";
+    firstRound.textContent = `Líder oficial no 1º turno: ${feature.properties.firstRoundWinnerName}`;
+    container.append(firstRound);
+  }
+
   const candidates = [
     {
       name: feature.properties.firstName,
@@ -444,12 +457,18 @@ export function ElectionOverviewMap({
   turn,
   onSelectState,
   onSelectMunicipality,
+  simulatedResults,
+  simulatedComparison,
+  onLevelChange,
 }: {
   selectedState: MapFeature | null;
   selectedMunicipality: MapFeature | null;
   turn: number;
   onSelectState: (feature: MapFeature | null) => void;
   onSelectMunicipality: (feature: MapFeature | null) => void;
+  simulatedResults?: OverviewResults;
+  simulatedComparison?: Record<string, string>;
+  onLevelChange?: (level: "states" | "municipalities") => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -462,6 +481,7 @@ export function ElectionOverviewMap({
   const [municipalitySuggestions, setMunicipalitySuggestions] = useState<
     BoundaryCollection["features"]
   >([]);
+  const [stateSuggestions, setStateSuggestions] = useState<BoundaryCollection["features"]>([]);
   const [dark, setDark] = useState(false);
   const [loading, setLoading] = useState(true);
   const [resultsLoading, setResultsLoading] = useState(true);
@@ -484,12 +504,13 @@ export function ElectionOverviewMap({
     const query = normalizeSearch(municipalityQuery.trim());
     if (query.length < 2) {
       setMunicipalitySuggestions([]);
+      setStateSuggestions([]);
       return;
     }
 
     let active = true;
-    void loadBoundaries("municipalities")
-      .then((boundaries) => {
+    void Promise.all([loadBoundaries("municipalities"), loadBoundaries("states")])
+      .then(([boundaries, states]) => {
         if (!active) return;
         setMunicipalitySuggestions(
           boundaries.features
@@ -497,6 +518,13 @@ export function ElectionOverviewMap({
               normalizeSearch(`${feature.properties.name} ${feature.properties.uf}`).includes(query),
             )
             .slice(0, 8),
+        );
+        setStateSuggestions(
+          states.features
+            .filter((feature) =>
+              normalizeSearch(`${feature.properties.name} ${feature.properties.uf}`).includes(query),
+            )
+            .slice(0, 4),
         );
       })
       .catch((reason: unknown) => {
@@ -509,6 +537,10 @@ export function ElectionOverviewMap({
       active = false;
     };
   }, [municipalityQuery]);
+
+  useEffect(() => {
+    onLevelChange?.(level);
+  }, [level, onLevelChange]);
 
   useEffect(() => {
     let active = true;
@@ -534,8 +566,22 @@ export function ElectionOverviewMap({
         if (!active) return;
         const resultsCacheKey = `${turn}:${level}`;
         const cachedResults = resultsCache.current.get(resultsCacheKey);
-        const data = addElectionResults(boundaries, {
-          ...(cachedResults ?? {
+        const municipalityProjectionUnavailable =
+          Boolean(simulatedResults && level === "municipalities" && !selectedState);
+        const initialResults = simulatedResults
+          ? municipalityProjectionUnavailable
+            ? {
+                candidates: simulatedResults.candidates,
+                results: {},
+                unpublished: 0,
+                failed: 0,
+                updatedAt: simulatedResults.updatedAt,
+                sourceUrl: simulatedResults.sourceUrl,
+                turn,
+                uf: "BR",
+              }
+            : simulatedResults
+          : cachedResults ?? {
             candidates: [],
             results: {},
             unpublished: 0,
@@ -544,8 +590,8 @@ export function ElectionOverviewMap({
             sourceUrl: "",
             turn,
             uf: "BR",
-          }),
-        });
+          };
+        const data = addElectionResults(boundaries, initialResults, simulatedComparison);
         latestResultsData = data;
         const { Map, NavigationControl, Popup, setWorkerUrl } = await import("maplibre-gl");
         if (!active || !containerRef.current) return;
@@ -597,43 +643,42 @@ export function ElectionOverviewMap({
             beforeId,
           );
 
-          if (stateBoundaries) {
-            map.addSource(stateBoundarySourceId, {
-              type: "geojson",
-              data: stateBoundaries,
-            });
-            map.addLayer({
-              id: stateBoundaryLayerId,
-              type: "line",
-              source: stateBoundarySourceId,
-              paint: {
-                "line-color": "#111111",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2.2],
-                "line-opacity": 1,
-              },
-            });
-            map.addSource(stateLabelsSourceId, {
-              type: "geojson",
-              data: createStateLabels(stateBoundaries),
-            });
-            map.addLayer({
-              id: stateLabelsLayerId,
-              type: "symbol",
-              source: stateLabelsSourceId,
-              layout: {
-                "text-field": ["get", "uf"],
-                "text-font": ["Open Sans Semibold"],
-                "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 7, 13],
-                "text-allow-overlap": true,
-              },
-              paint: {
-                "text-color": dark ? "#f4f4f5" : "#27272a",
-                "text-halo-color": dark ? "#18181b" : "#ffffff",
-                "text-halo-width": 1.4,
-                "text-opacity": 0.95,
-              },
-            });
-          }
+          const stateLabelBoundaries = stateBoundaries ?? boundaries;
+          map.addSource(stateBoundarySourceId, {
+            type: "geojson",
+            data: stateLabelBoundaries,
+          });
+          map.addLayer({
+            id: stateBoundaryLayerId,
+            type: "line",
+            source: stateBoundarySourceId,
+            paint: {
+              "line-color": "#ffffff",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2.2],
+              "line-opacity": 1,
+            },
+          });
+          map.addSource(stateLabelsSourceId, {
+            type: "geojson",
+            data: createStateLabels(stateLabelBoundaries),
+          });
+          map.addLayer({
+            id: stateLabelsLayerId,
+            type: "symbol",
+            source: stateLabelsSourceId,
+            layout: {
+              "text-field": ["get", "uf"],
+              "text-font": ["Open Sans Semibold"],
+              "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 7, 13],
+              "text-allow-overlap": true,
+            },
+            paint: {
+              "text-color": dark ? "#f4f4f5" : "#27272a",
+              "text-halo-color": dark ? "#18181b" : "#ffffff",
+              "text-halo-width": 1.4,
+              "text-opacity": 0.95,
+            },
+          });
 
           const selectedMunicipality = selectedMunicipalityRef.current;
           const selectedBoundary = selectedMunicipality
@@ -641,6 +686,11 @@ export function ElectionOverviewMap({
             : undefined;
           if (level === "municipalities" && selectedBoundary) {
             zoomToMunicipality(map, toMapGeometry(selectedBoundary.geometry));
+          } else if (level === "municipalities" && selectedState) {
+            const stateBoundary = stateBoundaries?.features.find(
+              (feature) => feature.properties.id === selectedState.properties.id,
+            );
+            if (stateBoundary) zoomToMunicipality(map, toMapGeometry(stateBoundary.geometry));
           } else {
             map.fitBounds([[-74.5, -34], [-34, 5.5]], { padding: 36, duration: 0 });
           }
@@ -724,6 +774,15 @@ export function ElectionOverviewMap({
         });
         function fetchMapResults() {
           if (!active) return;
+          if (simulatedResults) {
+            if (level === "municipalities" && !selectedState) {
+              setResultsStatus("Selecione uma UF para consultar a projeção dos municípios.");
+            } else {
+              setResultsStatus(null);
+            }
+            setResultsLoading(false);
+            return;
+          }
           setResultsLoading(true);
           setError(null);
           void fetch(`/api/election/map-results?turn=${turn}&scope=${level}&uf=br&stream=1`, {
@@ -826,6 +885,9 @@ export function ElectionOverviewMap({
   }, [
     dark,
     level,
+    selectedState?.properties.id,
+    simulatedComparison,
+    simulatedResults,
     turn,
   ]);
 
@@ -852,6 +914,14 @@ export function ElectionOverviewMap({
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível selecionar este município.");
     }
+  };
+  const selectState = (feature: BoundaryCollection["features"][number]) => {
+    onSelectState(toMapFeature(feature));
+    onSelectMunicipality(null);
+    setMunicipalityQuery("");
+    setMunicipalitySuggestions([]);
+    setStateSuggestions([]);
+    setLevel("states");
   };
 
   return (
@@ -914,8 +984,20 @@ export function ElectionOverviewMap({
             placeholder="Buscar município ou UF"
             className="h-10 w-full rounded-xl border border-border-button-default bg-background-primary-default px-3 text-body-2-regular text-text-primary outline-none placeholder:text-text-tertiary focus-visible:border-text-primary focus-visible:ring-1 focus-visible:ring-text-primary"
           />
-          {municipalitySuggestions.length > 0 && (
+          {(municipalitySuggestions.length > 0 || stateSuggestions.length > 0) && (
             <ul className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-border-button-default bg-background-primary-default p-1 shadow-card">
+              {stateSuggestions.map((feature) => (
+                <li key={`state-${feature.properties.id}`}>
+                  <button
+                    type="button"
+                    onClick={() => selectState(feature)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-body-2-regular text-text-primary hover:bg-background-secondary-default"
+                  >
+                    <span>{feature.properties.name}</span>
+                    <span className="text-caption-1-medium text-text-tertiary">{feature.properties.uf}</span>
+                  </button>
+                </li>
+              ))}
               {municipalitySuggestions.map((feature) => (
                 <li key={feature.properties.id}>
                   <button
@@ -929,6 +1011,11 @@ export function ElectionOverviewMap({
                 </li>
               ))}
             </ul>
+          )}
+          {simulatedResults && level === "municipalities" && !selectedState && (
+            <p role="status" className="absolute inset-x-4 top-4 z-10 rounded-xl border border-border-button-default bg-background-primary-default p-3 text-body-2-regular text-text-secondary shadow-card">
+              Selecione uma UF para consultar a projeção dos municípios.
+            </p>
           )}
         </div>
       </div>
@@ -949,7 +1036,7 @@ export function ElectionOverviewMap({
           </div>
         )}
       </div>
-      {resultsStatus && (
+      {resultsStatus && !simulatedResults && (
         <p role="status" className="text-caption-1-regular text-text-secondary">
           {resultsStatus}
         </p>

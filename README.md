@@ -11,7 +11,7 @@ A aplicação reúne dados publicados pelo TSE e limites geográficos do IBGE. E
 ### Recursos
 
 - Resultados presidenciais do primeiro e do segundo turno, com votos, percentuais e estatísticas de comparecimento.
-- Simulador do segundo turno com Flávio Bolsonaro e Lula como finalistas fixos. Configure a migração de votos de cada candidatura, votos em branco, votos nulos e abstenções; o painel mostra a distribuição até 100% e só exibe a projeção depois de salvar a simulação.
+- Simulador do segundo turno com Flávio Bolsonaro e Lula como finalistas fixos. Configure a migração de votos de cada candidatura, votos em branco, votos nulos e abstenções; o painel mostra a distribuição até 100% e só exibe a projeção depois de salvar a simulação. O mapa usa a mesma interface do dashboard, com modos por estado e município e busca por UF ou município; as projeções usam totais oficiais do primeiro turno e podem ser comparadas aos líderes oficiais no mapa.
 - Mapa interativo do OpenFreeMap no dashboard, recortado visualmente ao território brasileiro com limites do IBGE e resultados oficiais do TSE por estado ou pelos territórios dos municípios. No modo municipal, os resultados chegam em lotes e são aplicados progressivamente, com indicador de carregamento e atualização automática.
 - Apuração nacional atualizada automaticamente a cada 30 segundos. Em falhas temporárias de consulta, o dashboard mantém os últimos resultados oficiais disponíveis e informa que a atualização falhou.
 - Busca global de municípios, com seleção direta da cidade e do respectivo estado.
@@ -87,7 +87,7 @@ styles/                   Tokens, tipografia e estilos globais
 - `GET /api/election/results?turn=2&uf=br` — resultados oficiais de um turno e recorte. Aceita `turn=1|2`, `uf=br|<sigla>` e, junto de uma UF, `municipio=<código IBGE de 7 dígitos>`.
 - `GET /api/election/map-results?turn=1&scope=states&uf=br` — liderança por estado ou município. Para municípios, use `scope=municipalities`; `uf=br` consulta o Brasil ou informe o código IBGE de dois dígitos do estado.
 - `GET /api/election/map-results?turn=1&scope=states&uf=br&includeStateTotals=1` — inclui as estatísticas oficiais agregadas por estado usadas pelo simulador para calcular o mapa hipotético.
-- `GET /api/election/map-results?turn=1&scope=municipalities&uf=br&includeMunicipalityTotals=1` — inclui as estatísticas oficiais agregadas por município usadas pelo modo municipal do mapa simulado.
+- `GET /api/election/map-results?turn=1&scope=municipalities&uf={código-IBGE-da-UF}&includeMunicipalityTotals=1` — inclui as estatísticas oficiais agregadas dos municípios da UF selecionada no modo municipal do mapa simulado.
 - `GET /api/election/map-results?turn=1&scope=municipalities&uf=br&stream=1` — transmite os resultados municipais em lotes NDJSON para colorir o mapa e indicar o progresso enquanto as demais localidades são consultadas.
 - `GET /api/ibge/map?scope=states` — limites estaduais; `scope=municipalities&uf=br` consulta a malha municipal nacional; `scope=municipalities&uf=<código IBGE>` consulta um estado.
 

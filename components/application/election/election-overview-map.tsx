@@ -69,7 +69,6 @@ const countryMaskLayerId = "brazil-territory-mask-fill";
 const fillLayerId = "election-overview-fill";
 const outlineLayerId = "election-overview-outline";
 const stateBoundarySourceId = "election-overview-state-boundaries";
-const stateBoundaryCasingLayerId = "election-overview-state-boundary-casing";
 const stateBoundaryLayerId = "election-overview-state-boundary";
 const stateLabelsSourceId = "election-overview-state-labels";
 const stateLabelsLayerId = "election-overview-state-label";
@@ -604,16 +603,6 @@ export function ElectionOverviewMap({
               data: stateBoundaries,
             });
             map.addLayer({
-              id: stateBoundaryCasingLayerId,
-              type: "line",
-              source: stateBoundarySourceId,
-              paint: {
-                "line-color": dark ? "#f4f4f5" : "#ffffff",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.4, 8, 4],
-                "line-opacity": 1,
-              },
-            });
-            map.addLayer({
               id: stateBoundaryLayerId,
               type: "line",
               source: stateBoundarySourceId,
@@ -670,7 +659,6 @@ export function ElectionOverviewMap({
           });
           map.moveLayer(fillLayerId);
           map.moveLayer(outlineLayerId);
-          if (map.getLayer(stateBoundaryCasingLayerId)) map.moveLayer(stateBoundaryCasingLayerId);
           if (map.getLayer(stateBoundaryLayerId)) map.moveLayer(stateBoundaryLayerId);
           if (map.getLayer(stateLabelsLayerId)) map.moveLayer(stateLabelsLayerId);
           mapReady = true;

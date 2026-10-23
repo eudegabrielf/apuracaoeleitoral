@@ -164,67 +164,159 @@ input[type="search"]::-webkit-search-cancel-button {
   animation: number-fade 220ms ease-out;
 }
 
-.simulated-map-popup {
-  min-width: 190px;
+.election-map-popup-container {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.election-map-popup-container .maplibregl-popup-content {
+  min-width: 224px;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--color-border-button-default);
+  border-radius: 0.875rem;
+  background: var(--color-background-primary-default);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-sans);
+}
+
+.election-map-popup-container .maplibregl-popup-tip {
+  border-color: transparent;
+  filter: drop-shadow(0 1px 1px var(--color-border-button-default));
+}
+
+.election-map-popup-container.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: var(--color-background-primary-default);
+}
+
+.election-map-popup-container.maplibregl-popup-anchor-top .maplibregl-popup-tip {
+  border-bottom-color: var(--color-background-primary-default);
+}
+
+.election-map-popup-container.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--color-background-primary-default);
+}
+
+.election-map-popup-container.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--color-background-primary-default);
+}
+
+.election-map-popup-container.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.election-map-popup-container.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--color-background-primary-default);
+}
+
+.election-map-popup-container.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.election-map-popup-container.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--color-background-primary-default);
+}
+
+.election-map-popup {
+  min-width: 200px;
   color: var(--color-text-primary);
   font-family: var(--font-sans);
 }
 
-.maplibregl-popup-content {
-  border: 1px solid var(--color-border-button-default);
-  border-radius: 0.75rem;
-  background: var(--color-background-primary-default);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-card);
-}
-
-.maplibregl-popup-tip {
-  border-color: var(--color-background-primary-default);
-}
-
-.simulated-map-popup-title {
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.simulated-map-popup-winner {
-  margin-top: 2px;
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.simulated-map-popup-row {
+.election-map-popup-header {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding-top: 7px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--color-separator-border);
 }
 
-.simulated-map-popup-row + .simulated-map-popup-row {
-  margin-top: 7px;
+.election-map-popup-title {
+  overflow: hidden;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.election-map-popup-status {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--color-background-secondary-default);
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.election-map-popup-empty {
+  margin: 10px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.election-map-popup-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-top: 10px;
+}
+
+.election-map-popup-row + .election-map-popup-row {
+  margin-top: 9px;
+  padding-top: 9px;
   border-top: 1px solid var(--color-separator-border);
 }
 
-.simulated-map-popup-swatch {
-  width: 9px;
-  height: 9px;
-  margin-top: 4px;
+.election-map-popup-swatch {
+  width: 3px;
+  min-height: 34px;
   flex: none;
-  border-radius: 3px;
+  border-radius: 999px;
 }
 
-.simulated-map-popup-row p:first-child {
+.election-map-popup-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.election-map-popup-position {
+  margin: 0 0 2px;
+  color: var(--color-text-tertiary);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.election-map-popup-candidate {
+  overflow: hidden;
+  margin: 0;
   font-size: 12px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.simulated-map-popup-row p:last-child,
-.simulated-map-popup-tie {
-  margin-top: 2px;
-  color: var(--color-text-secondary);
+.election-map-popup-metrics {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.election-map-popup-votes,
+.election-map-popup-percentage {
+  margin: 0;
   font-size: 11px;
+}
+
+.election-map-popup-votes {
+  color: var(--color-text-secondary);
+}
+
+.election-map-popup-percentage {
+  flex: none;
+  font-weight: 700;
 }
 
 .simulator-cta,

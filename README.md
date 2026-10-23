@@ -12,12 +12,12 @@ A aplicação reúne dados publicados pelo TSE e limites geográficos do IBGE. E
 
 - Resultados presidenciais do primeiro e do segundo turno, com votos, percentuais e estatísticas de comparecimento.
 - Simulador do segundo turno com Flávio Bolsonaro e Lula como finalistas fixos. Configure a migração de votos de cada candidatura, votos em branco, votos nulos e abstenções; o painel mostra a distribuição até 100% e só exibe a projeção depois de salvar a simulação.
-- Mapa interativo do OpenFreeMap no dashboard, com limites do IBGE e resultados oficiais do TSE por estado ou pelos territórios dos municípios em todo o Brasil. No modo municipal, os resultados chegam em lotes e são aplicados progressivamente, com indicador de carregamento e atualização automática.
+- Mapa interativo do OpenFreeMap no dashboard, recortado visualmente ao território brasileiro com limites do IBGE e resultados oficiais do TSE por estado ou pelos territórios dos municípios. No modo municipal, os resultados chegam em lotes e são aplicados progressivamente, com indicador de carregamento e atualização automática.
 - Apuração nacional atualizada automaticamente a cada 30 segundos. Em falhas temporárias de consulta, o dashboard mantém os últimos resultados oficiais disponíveis e informa que a atualização falhou.
 - Busca global de municípios, com seleção direta da cidade e do respectivo estado.
 - Detalhes de liderança, empate e situação da publicação oficial ao interagir com o mapa.
 - Zoom, navegação pelo mapa e recorte por município.
-- Evolução dos resultados por publicação oficial. No segundo turno, o histórico local registra os percentuais oficiais observados a cada 10 minutos, preservando também a publicação final; passe sobre as curvas para consultar os percentuais e horários. Abaixo do gráfico, a legenda mostra apenas os candidatos e suas cores. O histórico fica no armazenamento local do navegador.
+- Evolução dos resultados por publicação oficial em gráfico responsivo, sem rolagem horizontal, com seleção de candidaturas e escala ampliada ao destacar candidaturas fora da liderança. No segundo turno, o histórico local registra os percentuais oficiais observados a cada 10 minutos, preservando também a publicação final; passe sobre as curvas para consultar os percentuais e horários. O histórico fica no armazenamento local do navegador.
 - Tema claro/escuro e layout responsivo.
 
 ## Fontes e atribuições

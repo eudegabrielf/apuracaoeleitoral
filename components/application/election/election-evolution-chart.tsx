@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { TooltipContentProps } from "recharts";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
 import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
 import { firstRoundCandidates } from "@/components/application/election/first-round-candidates";
@@ -16,6 +18,7 @@ type Snapshot = {
 };
 
 const snapshotInterval = 10 * 60 * 1000;
+type ChartCandidate = { id: string; name: string };
 
 const firstRoundHistory: Snapshot[] = [
   {
@@ -137,33 +140,74 @@ const formatTime = (value: number) =>
     minute: "2-digit",
   });
 
-function getTimeTicks(snapshots: Snapshot[], interval: number) {
-  const first = snapshots[0]?.observedAt;
-  const last = snapshots[snapshots.length - 1]?.observedAt;
-  if (first == null || last == null) return [];
+function ElectionChartTooltip({
+  active,
+  label,
+  payload,
+  candidates,
+}: TooltipContentProps & { candidates: ChartCandidate[] }) {
+  if (!active || !payload?.length) return null;
 
-  const ticks = [first];
-  for (let tick = Math.ceil(first / interval) * interval; tick < last; tick += interval) {
-    ticks.push(tick);
-  }
-  if (last !== first) ticks.push(last);
-  return ticks;
+  const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const values = payload.flatMap((entry) => {
+    const candidate = candidateById.get(String(entry.dataKey));
+    return candidate && typeof entry.value === "number"
+      ? [{ candidate, percentage: entry.value }]
+      : [];
+  });
+
+  if (values.length === 0) return null;
+
+  return (
+    <div className="w-56 max-w-[calc(100vw-6rem)] rounded-xl border border-border-button-default bg-background-primary-default p-2.5 text-text-primary shadow-card">
+      <p className="mb-2 text-caption-1-medium tabular-nums text-text-secondary">
+        {formatTime(Number(label))}
+      </p>
+      <ul className="max-h-28 space-y-1.5 overflow-y-auto">
+        {values.map(({ candidate, percentage }) => (
+          <li key={candidate.id} className="flex items-center justify-start gap-2">
+            <Image
+              src={`/election/candidates/${candidate.id}.jpg`}
+              alt=""
+              width={28}
+              height={28}
+              className="size-7 shrink-0 rounded-full border border-border-button-default object-cover"
+            />
+            <span className="text-caption-1-medium tabular-nums">
+              {percentage.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
-function formatTimeTick(value: number, first: number, last: number, interval: number) {
-  if (value === first || value === last) return formatTime(value);
-  if (interval === 60 * 60 * 1000) {
-    const hour = new Intl.DateTimeFormat("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      hour: "2-digit",
-    }).format(value);
-    return `${hour}h`;
-  }
-  return new Intl.DateTimeFormat("pt-BR", {
+function getTimeTicks(snapshots: Snapshot[]) {
+  return snapshots.map((snapshot) => snapshot.observedAt);
+}
+
+function formatTimeTick(value: number, first: number, last: number) {
+  const date = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(value);
+  const time = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
     hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
   }).format(value);
+  const firstDate = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(first);
+
+  return value === first || value === last || date !== firstDate
+    ? `${date} ${time}`
+    : time;
 }
 
 export function ElectionEvolutionChart({
@@ -178,6 +222,11 @@ export function ElectionEvolutionChart({
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loadedTurn, setLoadedTurn] = useState<number | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>(() =>
+    firstRoundCandidates.slice(0, 2).map((candidate) => candidate.id),
+  );
+  const chartFrameRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (turn === 1) {
@@ -239,17 +288,39 @@ export function ElectionEvolutionChart({
 
   const chartCandidates = turn === 1
     ? firstRoundCandidates
-    : results?.candidates.filter((candidate) => candidate.name.trim()).slice(0, 2) ?? [];
+    : results?.candidates.filter((candidate) => candidate.name.trim()) ?? [];
   const chartSnapshots = turn === 1 ? firstRoundHistory : snapshots;
   const historyLoading = turn === 2 && (loadedTurn !== turn || (loading && !results));
-  const visibleCandidateIds = new Set(chartCandidates.map((candidate) => candidate.id));
-  const tickInterval = turn === 1 ? 60 * 60 * 1000 : snapshotInterval;
-  const timeTicks = turn === 1
-    ? getTimeTicks(chartSnapshots, tickInterval)
-    : chartSnapshots.map((snapshot) => snapshot.observedAt);
+  const candidateKey = chartCandidates.map((candidate) => candidate.id).join(",");
+  useEffect(() => {
+    setSelectedCandidateIds(chartCandidates.slice(0, 2).map((candidate) => candidate.id));
+  }, [candidateKey]);
+
+  const selectedCandidates = chartCandidates.filter((candidate) =>
+    selectedCandidateIds.includes(candidate.id),
+  );
+  const visibleCandidateIds = new Set(selectedCandidates.map((candidate) => candidate.id));
+  const timeTicks = getTimeTicks(chartSnapshots);
   const firstTimestamp = chartSnapshots[0]?.observedAt ?? 0;
   const lastTimestamp = chartSnapshots[chartSnapshots.length - 1]?.observedAt ?? 0;
-  const chartWidth = Math.max(1480, timeTicks.length * 72);
+  const focusScale = selectedCandidates.length > 0 &&
+    !chartCandidates.slice(0, 2).some((candidate) => visibleCandidateIds.has(candidate.id));
+  const selectedPercentages = chartSnapshots.flatMap((snapshot) =>
+    snapshot.candidates
+      .filter((candidate) => visibleCandidateIds.has(candidate.id))
+      .map((candidate) => candidate.percentage),
+  );
+  const percentageDomain: [number, number] = focusScale && selectedPercentages.length > 0
+    ? (() => {
+        const minimum = Math.min(...selectedPercentages);
+        const maximum = Math.max(...selectedPercentages);
+        const padding = Math.max((maximum - minimum) * 0.2, 0.25);
+        return [
+          Math.max(0, Math.floor(minimum - padding)),
+          Math.min(100, Math.ceil(maximum + padding)),
+        ];
+      })()
+    : [0, 100];
   const data = chartSnapshots.map((snapshot) => ({
     ...Object.fromEntries(
       snapshot.candidates
@@ -259,6 +330,21 @@ export function ElectionEvolutionChart({
     observedAt: snapshot.observedAt,
     sourceUpdatedAt: snapshot.sourceUpdatedAt,
   }));
+
+  useEffect(() => {
+    const frame = chartFrameRef.current;
+    if (!frame) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      setChartSize({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      });
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [chartSnapshots.length, historyLoading, historyError, turn]);
 
   return (
     <section className="rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6">
@@ -270,8 +356,8 @@ export function ElectionEvolutionChart({
           <h2 className="mt-1 text-title-3-semibold text-text-primary">Evolução da apuração</h2>
           <p className="mt-1 text-body-2-regular text-text-secondary">
             {turn === 2
-              ? "Percentuais oficiais observados a cada 10 minutos. Passe sobre a curva para consultar os valores e horários."
-              : "Percentual de votos dos candidatos ao longo das publicações observadas."}
+              ? "Cada ponto marca uma captura oficial, registrada a cada 10 minutos durante a apuração. Selecione candidaturas para destacar suas trajetórias."
+              : "Compare a evolução dos percentuais oficiais ao longo da apuração."}
           </p>
         </div>
         <span className="rounded-full bg-background-secondary-default px-3 py-1.5 text-caption-1-medium text-text-secondary">
@@ -311,10 +397,18 @@ export function ElectionEvolutionChart({
         </p>
       ) : (
         <>
-          <div className="mt-5 w-full overflow-x-auto overscroll-x-contain rounded-2xl bg-background-secondary-default">
-            <div className="h-80 p-4" style={{ width: `${chartWidth}px` }}>
+          <div className="mt-5 rounded-2xl bg-background-secondary-default p-3 sm:p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-caption-1-medium text-text-secondary">
+                {selectedCandidates.length} de {chartCandidates.length} candidaturas em destaque
+              </p>
+              <span className="rounded-full border border-border-button-default bg-background-primary-default px-2.5 py-1 text-caption-1-regular text-text-tertiary">
+                {focusScale ? "Escala ampliada" : "Escala de 0% a 100%"}
+              </span>
+            </div>
+            <div ref={chartFrameRef} className="h-72 min-w-0 sm:h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+              <ComposedChart data={data} margin={{ top: 12, right: 12, bottom: 4, left: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--color-separator-border)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="observedAt"
@@ -322,34 +416,33 @@ export function ElectionEvolutionChart({
                   scale="time"
                   domain={["dataMin", "dataMax"]}
                   ticks={timeTicks}
-                  interval={0}
-                  tickFormatter={(value) => formatTimeTick(Number(value), firstTimestamp, lastTimestamp, tickInterval)}
+                  interval="preserveStartEnd"
+                  minTickGap={18}
+                  tickFormatter={(value) => formatTimeTick(Number(value), firstTimestamp, lastTimestamp)}
                   tickLine={false}
                   axisLine={false}
-                  tickMargin={12}
-                  tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
+                  tickMargin={10}
+                  tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
                 />
                 <YAxis
-                  domain={[0, 100]}
-                  width={42}
+                  domain={percentageDomain}
+                  width={48}
                   tickFormatter={(value: number) => `${value}%`}
+                  tickCount={5}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fontSize: 12, fill: "var(--color-text-tertiary)" }}
+                  tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }}
                 />
                 <Tooltip
-                  labelFormatter={(value) => `Observado às ${formatTime(Number(value))}`}
-                  formatter={(value, name) => [
-                    `${Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`,
-                    String(name),
-                  ]}
-                  cursor={{ stroke: "var(--color-chart-cursor)", strokeWidth: 1, strokeDasharray: "4 4" }}
-                  contentStyle={{
-                    background: "var(--color-background-primary-default)",
-                    border: "1px solid var(--color-border-button-default)",
-                    borderRadius: 12,
-                    color: "var(--color-text-primary)",
+                  content={(props) => (
+                    <ElectionChartTooltip {...props} candidates={selectedCandidates} />
+                  )}
+                  position={{
+                    x: Math.max(chartSize.width < 640 ? 8 : 50, chartSize.width - 252),
+                    y: Math.max(16, chartSize.height - 132),
                   }}
+                  cursor={{ stroke: "var(--color-chart-cursor)", strokeWidth: 1, strokeDasharray: "4 4" }}
+                  contentStyle={{ background: "transparent", border: "none", padding: 0 }}
                 />
                 {chartCandidates.map((candidate) => {
                   const color = getCandidateColor(candidate);
@@ -360,9 +453,13 @@ export function ElectionEvolutionChart({
                       name={candidate.name}
                       stroke={color.variable}
                       type="linear"
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={false}
+                      strokeWidth={2.8}
+                      dot={{
+                        r: 3,
+                        strokeWidth: 1.5,
+                        fill: "var(--color-background-primary-default)",
+                      }}
+                      activeDot={{ r: 5, strokeWidth: 2, fill: "var(--color-background-primary-default)" }}
                       connectNulls
                     />
                   );
@@ -372,13 +469,56 @@ export function ElectionEvolutionChart({
             </div>
           </div>
 
-          <ul aria-label="Candidatos do gráfico" className="mt-4 grid grid-cols-1 gap-x-5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-caption-1-medium text-text-secondary">Candidaturas</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedCandidateIds(chartCandidates.slice(0, 2).map((candidate) => candidate.id))}
+                className="rounded-lg px-2.5 py-1 text-caption-1-medium text-text-secondary transition-colors hover:bg-background-secondary-default hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+              >
+                Destaques
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCandidateIds(chartCandidates.map((candidate) => candidate.id))}
+                className="rounded-lg px-2.5 py-1 text-caption-1-medium text-text-secondary transition-colors hover:bg-background-secondary-default hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+              >
+                Todas
+              </button>
+            </div>
+          </div>
+          <ul
+            aria-label="Selecionar candidaturas do gráfico"
+            className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3"
+          >
             {chartCandidates.map((candidate) => {
               const color = getCandidateColor(candidate);
+              const selected = visibleCandidateIds.has(candidate.id);
               return (
-                <li key={candidate.id} title={candidate.name} className="flex min-w-0 items-center gap-2 border-b border-separator-border py-2">
-                  <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${color.activeBackground}`} />
-                  <span className="min-w-0 flex-1 truncate text-caption-1-regular text-text-secondary">{candidate.name}</span>
+                <li key={candidate.id} title={candidate.name} className="min-w-0">
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setSelectedCandidateIds((current) =>
+                      selected
+                        ? current.filter((id) => id !== candidate.id)
+                        : [...current, candidate.id],
+                    )}
+                    className={`flex w-full min-w-0 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring ${
+                      selected
+                        ? "border-border-button-default bg-background-secondary-default"
+                        : "border-transparent bg-transparent opacity-60 hover:bg-background-secondary-default hover:opacity-100"
+                    }`}
+                  >
+                    <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${color.activeBackground}`} />
+                    <span className="min-w-0 flex-1 truncate text-caption-1-regular text-text-secondary">
+                      {candidate.name}
+                    </span>
+                    <span className="shrink-0 text-caption-1-medium tabular-nums text-text-primary">
+                      {candidate.percentage.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%
+                    </span>
+                  </button>
                 </li>
               );
             })}

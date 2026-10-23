@@ -64,6 +64,8 @@ const municipalitiesUrl = "/maps/brazil-municipalities.geojson";
 const lightStyleUrl = "https://tiles.openfreemap.org/styles/positron";
 const darkStyleUrl = "https://tiles.openfreemap.org/styles/dark";
 const sourceId = "election-overview-regions";
+const countryMaskSourceId = "brazil-territory-mask";
+const countryMaskLayerId = "brazil-territory-mask-fill";
 const fillLayerId = "election-overview-fill";
 const outlineLayerId = "election-overview-outline";
 const stateBoundarySourceId = "election-overview-state-boundaries";
@@ -120,8 +122,8 @@ function getGeometryBounds(
 
 function zoomToMunicipality(map: MapLibreMap, geometry: Geometry) {
   map.fitBounds(getGeometryBounds(geometry), {
-    padding: 56,
-    maxZoom: 10,
+    padding: 96,
+    maxZoom: 6,
     duration: 900,
   });
 }
@@ -290,6 +292,47 @@ function addElectionResults(
   };
 }
 
+function ringArea(ring: number[][]) {
+  return ring.reduce((area, position, index) => {
+    const next = ring[(index + 1) % ring.length];
+    return area + (position[0] ?? 0) * (next?.[1] ?? 0) -
+      (next?.[0] ?? 0) * (position[1] ?? 0);
+  }, 0) / 2;
+}
+
+function createBrazilTerritoryMask(boundaries: BoundaryCollection): Feature<Polygon> {
+  const exteriorRings: number[][][] = [];
+  for (const feature of boundaries.features) {
+    const polygons = feature.geometry.type === "Polygon"
+      ? [feature.geometry.coordinates]
+      : feature.geometry.coordinates;
+    for (const polygon of polygons) {
+      const exterior = polygon[0]?.map((position) => [position[0], position[1]]);
+      if (!exterior || exterior.length < 4) continue;
+      if (ringArea(exterior) > 0) exterior.reverse();
+      exteriorRings.push(exterior);
+    }
+  }
+
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [-180, -85],
+          [180, -85],
+          [180, 85],
+          [-180, 85],
+          [-180, -85],
+        ],
+        ...exteriorRings,
+      ],
+    },
+  };
+}
+
 function toMapGeometry(geometry: Polygon | MultiPolygon): Geometry {
   const toPosition = (position: number[]): [number, number] => [
     position[0] ?? 0,
@@ -322,25 +365,27 @@ function toMapFeature(feature: Feature<Polygon | MultiPolygon, BoundaryPropertie
 
 function createPopup(feature: OverviewFeature) {
   const container = document.createElement("div");
-  container.className = "simulated-map-popup";
+  container.className = "election-map-popup";
+
+  const header = document.createElement("div");
+  header.className = "election-map-popup-header";
   const title = document.createElement("p");
-  title.className = "simulated-map-popup-title";
+  title.className = "election-map-popup-title";
   title.textContent = feature.properties.name;
-  container.append(title);
+  const status = document.createElement("span");
+  status.className = "election-map-popup-status";
 
   if (feature.properties.tie) {
-    const tie = document.createElement("p");
-    tie.className = "simulated-map-popup-tie";
-    tie.textContent = "Empate entre as candidaturas";
-    container.append(tie);
+    status.textContent = "Empate";
   } else if (feature.properties.firstName) {
-    const winner = document.createElement("p");
-    winner.className = "simulated-map-popup-winner";
-    winner.textContent = `Mais votado: ${feature.properties.winnerName}`;
-    container.append(winner);
+    status.textContent = "Apuração";
+  } else {
+    status.textContent = "Sem dados";
   }
+  header.append(title, status);
+  container.append(header);
 
-  for (const candidate of [
+  const candidates = [
     {
       name: feature.properties.firstName,
       votes: feature.properties.firstVotes,
@@ -353,22 +398,43 @@ function createPopup(feature: OverviewFeature) {
       percentage: feature.properties.secondPercentage,
       color: feature.properties.secondColor,
     },
-  ]) {
-    if (!candidate.name) continue;
+  ].filter((candidate) => candidate.name);
+
+  if (candidates.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "election-map-popup-empty";
+    empty.textContent = "Aguardando publicação de votos pelo TSE.";
+    container.append(empty);
+  }
+
+  candidates.forEach((candidate, index) => {
     const row = document.createElement("div");
-    row.className = "simulated-map-popup-row";
+    row.className = "election-map-popup-row";
     const swatch = document.createElement("span");
-    swatch.className = "simulated-map-popup-swatch";
+    swatch.className = "election-map-popup-swatch";
     swatch.style.backgroundColor = candidate.color;
     const details = document.createElement("div");
+    details.className = "election-map-popup-details";
+    const position = document.createElement("p");
+    position.className = "election-map-popup-position";
+    position.textContent = index === 0 ? "Mais votado" : "2º lugar";
     const name = document.createElement("p");
+    name.className = "election-map-popup-candidate";
     name.textContent = candidate.name;
+    const metrics = document.createElement("div");
+    metrics.className = "election-map-popup-metrics";
     const votes = document.createElement("p");
-    votes.textContent = `${numberFormat.format(Math.round(candidate.votes))} votos · ${percentFormat.format(candidate.percentage)}%`;
-    details.append(name, votes);
+    votes.className = "election-map-popup-votes";
+    votes.textContent = `${numberFormat.format(Math.round(candidate.votes))} votos`;
+    const percentage = document.createElement("p");
+    percentage.className = "election-map-popup-percentage";
+    percentage.textContent = `${percentFormat.format(candidate.percentage)}%`;
+    metrics.append(votes, percentage);
+    details.append(position, name, metrics);
     row.append(swatch, details);
     container.append(row);
-  }
+  });
+
   return container;
 }
 
@@ -448,6 +514,7 @@ export function ElectionOverviewMap({
     let active = true;
     let map: MapLibreMap | null = null;
     let popup: import("maplibre-gl").Popup | null = null;
+    let popupFeatureId: string | null = null;
     let mapReady = false;
     let latestResultsData: ReturnType<typeof addElectionResults> | null = null;
     let resultsRefreshTimer: number | null = null;
@@ -522,8 +589,9 @@ export function ElectionOverviewMap({
               type: "line",
               source: sourceId,
               paint: {
-                "line-color": dark ? "#52525b" : "#ffffff",
+                "line-color": "#111111",
                 "line-width": 0.65,
+                "line-opacity": 0.85,
               },
             },
             beforeId,
@@ -539,9 +607,9 @@ export function ElectionOverviewMap({
               type: "line",
               source: stateBoundarySourceId,
               paint: {
-                "line-color": dark ? "#f4f4f5" : "#3f3f46",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.2, 8, 2],
-                "line-opacity": 0.95,
+                "line-color": "#111111",
+                "line-width": 0.65,
+                "line-opacity": 0.85,
               },
             });
             map.addSource(stateLabelsSourceId, {
@@ -576,6 +644,23 @@ export function ElectionOverviewMap({
           } else {
             map.fitBounds([[-74.5, -34], [-34, 5.5]], { padding: 36, duration: 0 });
           }
+          map.addSource(countryMaskSourceId, {
+            type: "geojson",
+            data: createBrazilTerritoryMask(stateBoundaries ?? boundaries),
+          });
+          map.addLayer({
+            id: countryMaskLayerId,
+            type: "fill",
+            source: countryMaskSourceId,
+            paint: {
+              "fill-color": dark ? "#18181b" : "#c4c9cb",
+              "fill-opacity": 1,
+            },
+          });
+          map.moveLayer(fillLayerId);
+          map.moveLayer(outlineLayerId);
+          if (map.getLayer(stateBoundaryLayerId)) map.moveLayer(stateBoundaryLayerId);
+          if (map.getLayer(stateLabelsLayerId)) map.moveLayer(stateLabelsLayerId);
           mapReady = true;
           if (latestResultsData) {
             const source = map.getSource(sourceId);
@@ -595,11 +680,24 @@ export function ElectionOverviewMap({
           const feature = event.features?.[0] as OverviewFeature | undefined;
           if (!feature || !map) return;
           map.getCanvas().style.cursor = "pointer";
-          popup ??= new Popup({ closeButton: false, closeOnClick: false, offset: 14, maxWidth: "280px" });
+          const featureId = feature.properties.id;
+          if (popupFeatureId === featureId) {
+            popup?.setLngLat(event.lngLat);
+            return;
+          }
+          popupFeatureId = featureId;
+          popup ??= new Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 12,
+            maxWidth: "280px",
+            className: "election-map-popup-container",
+          });
           popup.setDOMContent(createPopup(feature)).setLngLat(event.lngLat).addTo(map);
         });
         map.on("mouseleave", fillLayerId, () => {
           if (map) map.getCanvas().style.cursor = "";
+          popupFeatureId = null;
           popup?.remove();
         });
         map.on("click", fillLayerId, (event) => {

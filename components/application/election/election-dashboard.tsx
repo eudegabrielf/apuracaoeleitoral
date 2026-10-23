@@ -6,9 +6,7 @@ import {
   RiArrowRightLine,
   RiExternalLinkLine,
   RiGithubFill,
-  RiMoonLine,
   RiRefreshLine,
-  RiSunLine,
   RiTimeLine,
 } from "@remixicon/react";
 import { Badge } from "@/components/base/badges/badge";
@@ -19,6 +17,7 @@ import { ElectionRegions } from "@/components/application/election/election-regi
 import { ElectionDataNotice } from "@/components/application/election/election-data-notice";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
 import { ElectionSkeleton } from "@/components/application/election/election-skeleton";
+import { ThemeToggle } from "@/components/application/election/theme-toggle";
 import { cx } from "@/utils/cx";
 
 type Candidate = {
@@ -75,49 +74,6 @@ function CandidatePhoto({ candidate, size = "medium" }: { candidate: Candidate; 
       width={pixels}
       height={pixels}
       className={cx(dimensions, "shrink-0 rounded-full border border-border-button-default object-cover")}
-    />
-  );
-}
-
-function ThemeToggle() {
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const applySystem = () => {
-      if (!window.localStorage.getItem("apuracaoeleitoral:theme")) {
-        root.classList.toggle("dark", media.matches);
-        setDark(media.matches);
-      }
-    };
-
-    setDark(root.classList.contains("dark"));
-    media.addEventListener("change", applySystem);
-    const observer = new MutationObserver(() => setDark(root.classList.contains("dark")));
-    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => {
-      media.removeEventListener("change", applySystem);
-      observer.disconnect();
-    };
-  }, []);
-
-  const toggle = () => {
-    const next = !document.documentElement.classList.contains("dark");
-    document.documentElement.classList.toggle("dark", next);
-    window.localStorage.setItem("apuracaoeleitoral:theme", next ? "dark" : "light");
-    setDark(next);
-  };
-
-  return (
-    <Button
-      variant="secondary"
-      size="small"
-      iconOnly
-      leadingIcon={dark ? RiSunLine : RiMoonLine}
-      aria-label={dark ? "Ativar tema claro" : "Ativar tema escuro"}
-      title={dark ? "Ativar tema claro" : "Ativar tema escuro"}
-      onClick={toggle}
     />
   );
 }
@@ -277,12 +233,14 @@ export function ElectionDashboard() {
   const [liveError, setLiveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshIconSpinning, setRefreshIconSpinning] = useState(false);
   const [selectedTurn, setSelectedTurn] = useState(2);
-  const refreshInFlight = useRef(false);
+  const refreshSequence = useRef(0);
+  const refreshIconTimer = useRef<number | null>(null);
 
   const refresh = useCallback(async (isInitial = false, signal?: AbortSignal) => {
-    if (refreshInFlight.current || signal?.aborted) return;
-    refreshInFlight.current = true;
+    if (signal?.aborted) return;
+    const requestId = ++refreshSequence.current;
     if (isInitial) setLoading(true);
     else setRefreshing(true);
 
@@ -291,7 +249,7 @@ export function ElectionDashboard() {
         fetchResults(1, "br", undefined, signal),
         fetchResults(2, "br", undefined, signal),
       ]);
-      if (signal?.aborted) return;
+      if (signal?.aborted || requestId !== refreshSequence.current) return;
       if (first.status === "fulfilled") {
         setFirstRound(first.value);
         setFirstRoundError(null);
@@ -305,8 +263,7 @@ export function ElectionDashboard() {
         setLiveError(live.reason instanceof Error ? live.reason.message : "Falha ao consultar o TSE.");
       }
     } finally {
-      refreshInFlight.current = false;
-      if (!signal?.aborted) {
+      if (!signal?.aborted && requestId === refreshSequence.current) {
         setLoading(false);
         setRefreshing(false);
       }
@@ -320,12 +277,26 @@ export function ElectionDashboard() {
     return () => {
       controller.abort();
       window.clearInterval(timer);
+      if (refreshIconTimer.current !== null) {
+        window.clearTimeout(refreshIconTimer.current);
+      }
     };
   }, [refresh]);
 
+  const refreshManually = () => {
+    setRefreshIconSpinning(true);
+    if (refreshIconTimer.current !== null) {
+      window.clearTimeout(refreshIconTimer.current);
+    }
+    refreshIconTimer.current = window.setTimeout(() => {
+      setRefreshIconSpinning(false);
+      refreshIconTimer.current = null;
+    }, 3000);
+    void refresh();
+  };
+
   const selectedResults = selectedTurn === 1 ? firstRound : liveResults;
   const selectedError = selectedTurn === 1 ? firstRoundError : liveError;
-  const selectedTurnName = selectedTurn === 1 ? "Primeiro turno" : "Segundo turno";
   const isWaitingForRunoff =
     selectedTurn === 2 &&
     selectedResults != null &&
@@ -334,8 +305,6 @@ export function ElectionDashboard() {
     () => liveResults?.updatedAt ?? firstRound?.updatedAt ?? "Aguardando arquivo do TSE",
     [firstRound?.updatedAt, liveResults?.updatedAt],
   );
-  const initialResultsLoading = loading && !selectedResults && !selectedError;
-
   return (
     <div className="min-h-screen bg-background-full p-3 sm:p-4">
       <div className="mx-auto w-full max-w-[1600px]">
@@ -357,8 +326,8 @@ export function ElectionDashboard() {
                   variant="secondary"
                   size="small"
                   leadingIcon={RiRefreshLine}
-                  disabled={refreshing}
-                  onClick={() => void refresh()}
+                  className={refreshIconSpinning ? "[&_svg]:animate-spin" : undefined}
+                  onClick={refreshManually}
                 >
                   Atualizar
                 </Button>
@@ -377,28 +346,6 @@ export function ElectionDashboard() {
                 </a>
               </div>
             </header>
-
-            <section className="flex flex-wrap items-end justify-between gap-4 px-1">
-              <div className="max-w-3xl">
-                <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
-                  Cobertura eleitoral
-                </p>
-                <h1 className="mt-2 text-title-1-medium text-text-primary">
-                  A apuração presidencial, em um só lugar.
-                </h1>
-                <p className="mt-2 text-body-regular text-text-secondary">
-                  Acompanhe os resultados presidenciais oficiais em todo o Brasil, com consulta por estado e município neste painel.
-                </p>
-              </div>
-              <a
-                href="https://resultados.tse.jus.br/oficial/app/index.html"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 text-body-2-medium text-text-secondary hover:text-text-primary"
-              >
-                Abrir resultados oficiais <RiExternalLinkLine className="size-4" aria-hidden />
-              </a>
-            </section>
 
             <section
               aria-label="Simulador de segundo turno"
@@ -472,101 +419,6 @@ export function ElectionDashboard() {
                 detail="Os resultados serão exibidos quando a consulta oficial estiver disponível. Nenhum voto é estimado."
               />
             )}
-
-            <section
-              aria-label={`Estatísticas nacionais do ${selectedTurnName.toLowerCase()}`}
-              aria-busy={initialResultsLoading}
-              className="border-y border-separator-border py-4"
-            >
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
-                    Brasil · {selectedTurn}º turno
-                  </p>
-                  <h2 className="mt-1 text-title-3-semibold text-text-primary">Estatísticas da apuração</h2>
-                </div>
-                {initialResultsLoading ? (
-                  <ElectionSkeleton className="h-3.5 w-40" />
-                ) : (
-                  <p className="text-caption-1-regular text-text-tertiary">
-                    Atualização do TSE: {selectedResults?.updatedAt ?? "aguardando arquivo"}
-                  </p>
-                )}
-              </div>
-              <dl className="mt-3 grid grid-cols-2 gap-x-5 sm:grid-cols-3 xl:grid-cols-4">
-                <div className="border-t border-separator-border py-3">
-                  <dt className="text-caption-1-regular text-text-tertiary">Eleitorado apto</dt>
-                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-28" /> : formatNumber(selectedResults?.statistics.eligibleVoters)}
-                  </dd>
-                </div>
-                <div className="border-t border-separator-border py-3">
-                  <dt className="text-caption-1-regular text-text-tertiary">Comparecimento</dt>
-                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-24" /> : formatNumber(selectedResults?.statistics.voters)}
-                  </dd>
-                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : formatPercent(
-                      selectedResults?.statistics.eligibleVoters && selectedResults.statistics.voters != null
-                        ? (selectedResults.statistics.voters / selectedResults.statistics.eligibleVoters) * 100
-                        : null,
-                    )}{!initialResultsLoading && " do eleitorado"}
-                  </dd>
-                </div>
-                <div className="border-t border-separator-border py-3">
-                  <dt className="text-caption-1-regular text-text-tertiary">Abstenções</dt>
-                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-24" /> : formatNumber(selectedResults?.statistics.abstentions)}
-                  </dd>
-                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : `${formatPercent(selectedResults?.statistics.abstentionPercentage)} do eleitorado`}
-                  </dd>
-                </div>
-                <div className="border-t border-separator-border py-3">
-                  <dt className="text-caption-1-regular text-text-tertiary">Votos válidos</dt>
-                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-24" /> : formatNumber(selectedResults?.statistics.validVotes)}
-                  </dd>
-                </div>
-                <div className="border-t border-separator-border py-3">
-                  <dt className="text-caption-1-regular text-text-tertiary">Votos em branco</dt>
-                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-20" /> : formatNumber(selectedResults?.statistics.blankVotes)}
-                  </dd>
-                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : formatPercent(
-                      selectedResults?.statistics.voters && selectedResults.statistics.blankVotes != null
-                        ? (selectedResults.statistics.blankVotes / selectedResults.statistics.voters) * 100
-                        : null,
-                    )}{!initialResultsLoading && " dos votantes"}
-                  </dd>
-                </div>
-                <div className="border-t border-separator-border py-3">
-                  <dt className="text-caption-1-regular text-text-tertiary">Votos nulos</dt>
-                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-20" /> : formatNumber(selectedResults?.statistics.nullVotes)}
-                  </dd>
-                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-24" /> : formatPercent(
-                      selectedResults?.statistics.voters && selectedResults.statistics.nullVotes != null
-                        ? (selectedResults.statistics.nullVotes / selectedResults.statistics.voters) * 100
-                        : null,
-                    )}{!initialResultsLoading && " dos votantes"}
-                  </dd>
-                </div>
-                <div className="border-t border-separator-border py-3">
-                  <dt className="text-caption-1-regular text-text-tertiary">Seções totalizadas</dt>
-                  <dd className="mt-1 text-title-3-semibold tabular-nums text-text-primary">
-                    {initialResultsLoading ? <ElectionSkeleton className="h-7 w-28" /> : selectedResults?.sections?.counted == null
-                      ? "—"
-                      : `${formatNumber(selectedResults.sections.counted)} / ${formatNumber(selectedResults.sections.total)}`}
-                  </dd>
-                  <dd className="text-caption-1-regular tabular-nums text-text-secondary">
-                    {initialResultsLoading ? <ElectionSkeleton className="mt-1 h-3 w-16" /> : formatPercent(selectedResults?.sections?.percentage)}
-                  </dd>
-                </div>
-              </dl>
-            </section>
 
             <CandidatePanel
               title={selectedTurn === 1 ? "Primeiro turno" : "Segundo turno · 25 de outubro"}

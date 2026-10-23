@@ -7,6 +7,7 @@ import {
   RiArrowLeftLine,
   RiCloseLine,
   RiExternalLinkLine,
+  RiGithubFill,
 } from "@remixicon/react";
 import { Dialog, Modal, ModalOverlay } from "react-aria-components";
 import { Badge } from "@/components/base/badges/badge";
@@ -14,6 +15,7 @@ import { Button, ButtonLink } from "@/components/base/buttons/button";
 import { getCandidateColor } from "@/components/application/election/candidate-colors";
 import { ElectionDataNotice } from "@/components/application/election/election-data-notice";
 import { firstRoundCandidates } from "@/components/application/election/first-round-candidates";
+import { ThemeToggle } from "@/components/application/election/theme-toggle";
 import { cx } from "@/utils/cx";
 
 type Candidate = {
@@ -461,27 +463,43 @@ export function SecondRoundSimulator() {
   return (
     <div className="min-h-screen bg-background-full p-3 sm:p-4">
       <main className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 pb-8">
-        <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-button-default bg-background-primary-default px-5 py-3 shadow-card">
+        <header className="relative flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-button-default bg-background-primary-default px-5 py-3 shadow-card">
           <div>
             <p className="text-body-medium text-text-primary">Apuração</p>
             <p className="text-caption-1-regular text-text-tertiary">Eleição presidencial · 2026</p>
+          </div>
+          <div className="absolute end-5 top-3 flex items-center gap-1 sm:static">
+            <ThemeToggle />
+            <a
+              href="https://github.com/eudegabrielf"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Perfil de Eude Gabriel no GitHub"
+              title="Perfil de Eude Gabriel no GitHub"
+              className="flex size-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-background-secondary-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
+            >
+              <RiGithubFill className="size-5" aria-hidden />
+            </a>
           </div>
           <ButtonLink
             href="/"
             variant="secondary"
             size="small"
             leadingIcon={RiArrowLeftLine}
+            className="me-auto sm:me-0"
           >
             Voltar à apuração
           </ButtonLink>
         </header>
 
         <section className="flex flex-wrap items-end justify-between gap-4 px-1">
-          <div className="max-w-3xl">
+          <div className="w-full">
             <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
               Cenários eleitorais
             </p>
-            <h1 className="mt-2 text-title-1-medium text-text-primary">Simulador do 2º turno</h1>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <h1 className="min-w-0 text-title-1-medium text-text-primary">Simulador do 2º turno</h1>
+            </div>
             <p className="mt-2 text-body-regular text-text-secondary">
               Explore como diferentes hipóteses de migração dos votos do primeiro turno mudariam a disputa.
               Os resultados são cenários definidos por você, não previsões eleitorais.

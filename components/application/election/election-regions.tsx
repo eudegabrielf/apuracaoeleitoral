@@ -122,7 +122,7 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
           onSelectMunicipality={setMunicipality}
         />
 
-        <section className="min-w-0 rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6">
+      <section className="min-w-0 rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">Resultado oficial · {turn}º turno</p>
@@ -167,6 +167,42 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
               </div>
             ) : (
               <>
+                <h4 className="mb-2 mt-5 text-body-medium text-text-primary">Votação nominal</h4>
+                <div className="flex flex-col divide-y divide-separator-border">
+                  {results.candidates.map((candidate, index) => (
+                    <div key={candidate.id} className="flex items-center justify-between gap-3 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="w-5 shrink-0 text-caption-1-medium tabular-nums text-text-tertiary">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <Image
+                          src={`/election/candidates/${candidate.id}.jpg`}
+                          alt={`Foto oficial de campanha de ${candidate.name}`}
+                          width={40}
+                          height={40}
+                          className="size-10 shrink-0 rounded-full border border-border-button-default object-cover"
+                        />
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-2 truncate text-body-medium text-text-primary">
+                            <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${getCandidateColor(candidate).activeBackground}`} />
+                            {candidate.name}
+                          </p>
+                          <p className="text-caption-1-regular text-text-secondary">{candidate.party}</p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-end">
+                        <p className="text-body-medium tabular-nums text-text-primary">
+                          {formatNumber(candidate.votes)} votos
+                        </p>
+                        <p className="text-caption-1-regular tabular-nums text-text-secondary">
+                          {formatPercent(candidate.percentage)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <h4 className="mb-2 mt-5 text-body-medium text-text-primary">Estatísticas da apuração</h4>
                 <dl className="mt-4 grid grid-cols-2 gap-x-4 border-y border-separator-border sm:grid-cols-3">
                   <div className="py-3">
                     <dt className="text-caption-1-regular text-text-tertiary">Eleitorado apto</dt>
@@ -221,40 +257,6 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
                   </div>
                 </dl>
 
-                <h4 className="mb-2 mt-5 text-body-medium text-text-primary">Votação nominal</h4>
-                <div className="flex flex-col divide-y divide-separator-border">
-                  {results.candidates.map((candidate, index) => (
-                    <div key={candidate.id} className="flex items-center justify-between gap-3 py-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="w-5 shrink-0 text-caption-1-medium tabular-nums text-text-tertiary">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                        <Image
-                          src={`/election/candidates/${candidate.id}.jpg`}
-                          alt={`Foto oficial de campanha de ${candidate.name}`}
-                          width={40}
-                          height={40}
-                          className="size-10 shrink-0 rounded-full border border-border-button-default object-cover"
-                        />
-                        <div className="min-w-0">
-                          <p className="flex items-center gap-2 truncate text-body-medium text-text-primary">
-                            <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${getCandidateColor(candidate).activeBackground}`} />
-                            {candidate.name}
-                          </p>
-                          <p className="text-caption-1-regular text-text-secondary">{candidate.party}</p>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-end">
-                        <p className="text-body-medium tabular-nums text-text-primary">
-                          {formatNumber(candidate.votes)} votos
-                        </p>
-                        <p className="text-caption-1-regular tabular-nums text-text-secondary">
-                          {formatPercent(candidate.percentage)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </>
             )}
             {results && (
@@ -268,7 +270,7 @@ export function ElectionRegions({ turn = 2 }: { turn?: number }) {
                 <RiExternalLinkLine className="size-4" aria-hidden />
               </a>
             )}
-        </section>
+      </section>
       </div>
     </section>
   );

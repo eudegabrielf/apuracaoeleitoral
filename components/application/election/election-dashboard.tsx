@@ -54,6 +54,57 @@ const percentFormat = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 2,
 });
 const refreshInterval = 30_000;
+const brazilDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function isElectionDayOrLater(now = new Date()) {
+  const dateParts = Object.fromEntries(
+    brazilDateFormatter.formatToParts(now).map(({ type, value }) => [type, value]),
+  );
+  const localDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+  return localDate >= "2026-10-25";
+}
+
+function getMillisecondsUntilNextBrazilianMidnight(now: Date) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hourCycle: "h23",
+  });
+  const getLocalTimestamp = (date: Date) => {
+    const parts = Object.fromEntries(
+      formatter.formatToParts(date).map(({ type, value }) => [type, Number(value)]),
+    );
+    return Date.UTC(
+      parts.year ?? 0,
+      (parts.month ?? 1) - 1,
+      parts.day ?? 1,
+      parts.hour ?? 0,
+      parts.minute ?? 0,
+      parts.second ?? 0,
+    );
+  };
+  const localNow = getLocalTimestamp(now);
+  const localDate = new Date(localNow);
+  const midnightTomorrow = Date.UTC(
+    localDate.getUTCFullYear(),
+    localDate.getUTCMonth(),
+    localDate.getUTCDate() + 1,
+  );
+  const offset = localNow - Math.floor(now.getTime() / 1000) * 1000;
+  let target = midnightTomorrow - offset;
+  target = midnightTomorrow - (getLocalTimestamp(new Date(target)) - Math.floor(target / 1000) * 1000);
+  return Math.max(0, target - now.getTime() + 50);
+}
 
 function formatNumber(value: number | null | undefined) {
   return value == null ? "—" : numberFormat.format(value);
@@ -235,6 +286,7 @@ export function ElectionDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshIconSpinning, setRefreshIconSpinning] = useState(false);
   const [selectedTurn, setSelectedTurn] = useState(2);
+  const [electionDayReached, setElectionDayReached] = useState(false);
   const refreshSequence = useRef(0);
   const refreshIconTimer = useRef<number | null>(null);
 
@@ -295,12 +347,30 @@ export function ElectionDashboard() {
     void refresh();
   };
 
+  useEffect(() => {
+    let timer: number | null = null;
+    const updateElectionDay = () => {
+      const now = new Date();
+      setElectionDayReached(isElectionDayOrLater(now));
+      if (isElectionDayOrLater(now)) return;
+      timer = window.setTimeout(updateElectionDay, getMillisecondsUntilNextBrazilianMidnight(now));
+    };
+
+    updateElectionDay();
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, []);
+
   const selectedResults = selectedTurn === 1 ? firstRound : liveResults;
   const selectedError = selectedTurn === 1 ? firstRoundError : liveError;
   const isWaitingForRunoff =
     selectedTurn === 2 &&
     selectedResults != null &&
     selectedResults.sections?.counted === 0;
+  const isRunoffCounting =
+    liveResults?.sections?.counted != null &&
+    liveResults.sections.counted > 0;
   const lastSync = useMemo(
     () => liveResults?.updatedAt ?? firstRound?.updatedAt ?? "Aguardando arquivo do TSE",
     [firstRound?.updatedAt, liveResults?.updatedAt],
@@ -347,31 +417,33 @@ export function ElectionDashboard() {
               </div>
             </header>
 
-            <section
-              aria-label="Simulador de segundo turno"
-              className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border-button-default bg-background-secondary-default p-5 shadow-card sm:px-6"
-            >
-              <div className="max-w-2xl">
-                <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
-                  Cenários eleitorais
-                </p>
-                <h2 className="mt-1 text-title-3-semibold text-text-primary">
-                  Simulador de segundo turno
-                </h2>
-                <p className="mt-1 text-body-2-regular text-text-secondary">
-                  Configure migrações de votos para explorar cenários hipotéticos, sem alterar os resultados oficiais.
-                </p>
-              </div>
-              <ButtonLink
-                href="/simulador-2t"
-                variant="secondary"
-                size="medium"
-                trailingIcon={RiArrowRightLine}
-                className="simulator-cta"
+            {!isRunoffCounting && (
+              <section
+                aria-label="Simulador de segundo turno"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border-button-default bg-background-secondary-default p-5 shadow-card sm:px-6"
               >
-                Simular segundo turno
-              </ButtonLink>
-            </section>
+                <div className="max-w-2xl">
+                  <p className="text-caption-1-semibold uppercase tracking-wide text-text-tertiary">
+                    Cenários eleitorais
+                  </p>
+                  <h2 className="mt-1 text-title-3-semibold text-text-primary">
+                    Simulador de segundo turno
+                  </h2>
+                  <p className="mt-1 text-body-2-regular text-text-secondary">
+                    Configure migrações de votos para explorar cenários hipotéticos, sem alterar os resultados oficiais.
+                  </p>
+                </div>
+                <ButtonLink
+                  href="/simulador-2t"
+                  variant="secondary"
+                  size="medium"
+                  trailingIcon={RiArrowRightLine}
+                  className="simulator-cta"
+                >
+                  Simular segundo turno
+                </ButtonLink>
+              </section>
+            )}
 
             <section
               aria-label="Turno dos resultados nacionais"
@@ -421,7 +493,13 @@ export function ElectionDashboard() {
             )}
 
             <CandidatePanel
-              title={selectedTurn === 1 ? "Primeiro turno" : "Segundo turno · 25 de outubro"}
+              title={
+                selectedTurn === 1
+                  ? "Primeiro turno"
+                  : electionDayReached
+                    ? "Segundo turno"
+                    : "Segundo turno · 25 de outubro"
+              }
               subtitle={selectedTurn === 1 ? "Resultado oficial · Brasil" : "Apuração nacional ao vivo"}
               results={selectedResults}
               loading={loading}

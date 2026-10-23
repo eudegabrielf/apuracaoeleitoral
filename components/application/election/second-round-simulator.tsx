@@ -704,7 +704,7 @@ export function SecondRoundSimulator() {
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.8fr)]">
           <div className={cx(
             "flex min-w-0 flex-col gap-5 lg:order-1",
-            hasSimulated ? "order-2" : "order-1",
+            hasSimulated ? "order-3" : "order-1",
           )}>
             <section
               aria-labelledby="scenario-heading"
@@ -762,7 +762,10 @@ export function SecondRoundSimulator() {
                 <Button
                   variant="secondary"
                   size="small"
-                  className="runoff-simulation-trigger"
+                  className={cx(
+                    "runoff-simulation-trigger",
+                    hasSimulated ? "hidden" : "",
+                  )}
                   onClick={openMigrationModal}
                   disabled={!results || !firstFinalist || !secondFinalist}
                 >
@@ -853,14 +856,29 @@ export function SecondRoundSimulator() {
           )}>
             <section
               aria-labelledby="projection-heading"
-              className="rounded-3xl border border-border-button-default bg-background-primary-default p-5 shadow-card sm:p-6 lg:sticky lg:top-4"
+              className="rounded-3xl border border-border-button-default bg-background-primary-default p-4 shadow-card sm:p-6 lg:sticky lg:top-4"
             >
-              <p className="text-caption-1-semibold uppercase tracking-wide text-text-secondary">
-                Resultado hipotético
-              </p>
-              <h2 id="projection-heading" className="mt-2 text-title-3-semibold text-text-primary">
-                Projeção do cenário
-              </h2>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-caption-1-semibold uppercase tracking-wide text-text-secondary">
+                    Resultado hipotético
+                  </p>
+                  <h2 id="projection-heading" className="mt-2 text-title-3-semibold text-text-primary">
+                    Projeção do cenário
+                  </h2>
+                </div>
+                {hasSimulated && (
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    className="runoff-simulation-trigger shrink-0"
+                    onClick={openMigrationModal}
+                    disabled={!results || !firstFinalist || !secondFinalist}
+                  >
+                    Editar simulação
+                  </Button>
+                )}
+              </div>
 
               {hasSimulated && projection && firstFinalist && secondFinalist ? (
                 <>
@@ -900,10 +918,10 @@ export function SecondRoundSimulator() {
                     ))}
                   </div>
 
-                  <div className="mt-5 grid grid-cols-2 gap-3 border-t border-separator-border pt-4">
+                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-separator-border pt-3">
                     <div>
                       <p className="text-caption-1-regular text-text-tertiary">Comparecimento simulado</p>
-                      <p className="mt-1 text-body-medium tabular-nums text-text-primary">
+                      <p className="mt-1 text-body-2-medium tabular-nums text-text-primary sm:text-body-medium">
                         {projection.projectedVoters == null
                           ? "—"
                           : formatNumber(Math.round(projection.projectedVoters))}
@@ -911,7 +929,7 @@ export function SecondRoundSimulator() {
                     </div>
                     <div>
                       <p className="text-caption-1-regular text-text-tertiary">Abstenções simuladas</p>
-                      <p className="mt-1 text-body-medium tabular-nums text-text-primary">
+                      <p className="mt-1 text-body-2-medium tabular-nums text-text-primary sm:text-body-medium">
                         {projection.projectedAbstentions == null
                           ? "—"
                           : formatNumber(Math.round(projection.projectedAbstentions))}
@@ -938,7 +956,7 @@ export function SecondRoundSimulator() {
                     </div>
                   )}
                   {Math.round(projection.unallocatedCandidateVotes) > 0 && (
-                    <p className="mt-4 rounded-2xl bg-background-secondary-default p-3 text-caption-1-regular text-text-secondary">
+                    <p className="mt-3 rounded-2xl bg-background-secondary-default p-3 text-caption-1-regular text-text-secondary">
                       {formatNumber(Math.round(projection.unallocatedCandidateVotes))} votos das outras candidaturas não foram distribuídos entre Flávio Bolsonaro e Lula e, por isso, ficam fora da votação projetada.
                     </p>
                   )}
@@ -951,10 +969,8 @@ export function SecondRoundSimulator() {
             </section>
 
           </aside>
-        </section>
-
         {hasSimulated && (
-          <section aria-labelledby="simulation-map-heading" className="flex flex-col gap-4">
+          <section aria-labelledby="simulation-map-heading" className="order-2 flex min-w-0 flex-col gap-4 lg:order-3 lg:col-span-2">
             <div>
               <p className="text-caption-1-semibold uppercase tracking-wide text-text-secondary">
                 Cenário hipotético
@@ -1022,6 +1038,7 @@ export function SecondRoundSimulator() {
             )}
           </section>
         )}
+        </section>
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-separator-border px-1 pt-4 text-caption-1-regular text-text-tertiary">
           <p>Simulador independente. Dados eleitorais: Tribunal Superior Eleitoral (TSE).</p>
